@@ -2171,7 +2171,7 @@ def main():
         "FRACAS Cases",
         "Rules & Detection",
         "Dashboards",
-        "Admin (Master Data)",
+        "Admin (Master Data)sdd,
         "Data Quality",
         "About"
     ])
