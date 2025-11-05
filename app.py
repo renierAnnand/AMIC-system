@@ -244,6 +244,9 @@ def seed_data(engine):
         vehicle_id = f"VEH-{i+1:04d}"
         vin = f"VIN{i+1:010d}"
         year = np.random.randint(2017, 2024)
+        # Convert to date string for SQLite
+        in_service_date = (datetime.now() - timedelta(days=np.random.randint(365, 2000))).strftime('%Y-%m-%d')
+        
         vehicles_data.append({
             "vehicle_id": vehicle_id,
             "vin": vin,
@@ -252,7 +255,7 @@ def seed_data(engine):
             "year": year,
             "vehicle_type": np.random.choice(vehicle_types),
             "owning_unit": np.random.choice(owning_units),
-            "in_service_dt": datetime.now() - timedelta(days=np.random.randint(365, 2000)),
+            "in_service_dt": in_service_date,
             "status": "Active"
         })
     
@@ -446,7 +449,7 @@ def import_work_orders_from_excel(file_path: str) -> Tuple[int, List[str]]:
                     wo_data = {
                         "wo_id": next_id("WO", "work_orders", "wo_id"),
                         "status": "Open",
-                        "created_dt": datetime.now().date(),
+                        "created_dt": datetime.now().date().strftime('%Y-%m-%d'),
                         "created_by": users[0] if users else "import",
                         "workshop": workshops[0] if workshops else "Workshop A",
                         "vehicle_id": vehicle_id,
@@ -609,7 +612,10 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
         if not wo_data.get("completed_dt"):
             errors.append(f"{wo_data['status']} status requires completion date")
         if wo_data.get("completed_dt") and wo_data.get("created_dt"):
-            if wo_data["completed_dt"] < wo_data["created_dt"]:
+            # Convert to date for comparison
+            comp_date = wo_data["completed_dt"] if isinstance(wo_data["completed_dt"], str) else wo_data["completed_dt"].strftime('%Y-%m-%d')
+            crea_date = wo_data["created_dt"] if isinstance(wo_data["created_dt"], str) else wo_data["created_dt"].strftime('%Y-%m-%d')
+            if comp_date < crea_date:
                 errors.append("Completion date cannot be before created date")
     
     # Check codes auto-filled
@@ -619,6 +625,12 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
     
     if errors:
         return False, " | ".join(errors)
+    
+    # Convert dates to strings
+    if wo_data.get("created_dt"):
+        wo_data["created_dt"] = wo_data["created_dt"].strftime('%Y-%m-%d') if not isinstance(wo_data["created_dt"], str) else wo_data["created_dt"]
+    if wo_data.get("completed_dt"):
+        wo_data["completed_dt"] = wo_data["completed_dt"].strftime('%Y-%m-%d') if not isinstance(wo_data["completed_dt"], str) else wo_data["completed_dt"]
     
     # Calculate total cost
     wo_data["total_cost"] = (wo_data.get("parts_cost") or 0) + (wo_data.get("labor_hours") or 0) * 0
@@ -685,6 +697,14 @@ def get_work_order_by_id(wo_id: str) -> Dict:
 def save_fracas_case(case_data: Dict) -> Tuple[bool, str]:
     """Save FRACAS case."""
     engine = get_engine()
+    
+    # Convert dates to strings
+    if case_data.get("open_dt"):
+        case_data["open_dt"] = case_data["open_dt"].strftime('%Y-%m-%d') if not isinstance(case_data["open_dt"], str) else case_data["open_dt"]
+    if case_data.get("due_dt"):
+        case_data["due_dt"] = case_data["due_dt"].strftime('%Y-%m-%d') if not isinstance(case_data["due_dt"], str) else case_data["due_dt"]
+    if case_data.get("close_dt"):
+        case_data["close_dt"] = case_data["close_dt"].strftime('%Y-%m-%d') if not isinstance(case_data["close_dt"], str) else case_data["close_dt"]
     
     try:
         with engine.begin() as conn:
