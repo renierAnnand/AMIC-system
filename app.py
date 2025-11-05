@@ -305,35 +305,70 @@ def load_catalogue_from_excel_to_db(conn):
         df = pd.read_excel(excel_path, sheet_name="FRACAS_FailureMode_Catalogue")
         st.write(f"✓ Loading catalogue with {len(df)} entries...")
         
-        # Data cleaning
+        # IMPROVED: Better data cleaning with whitespace trimming
+        # First, trim all string columns of leading/trailing whitespace
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].str.strip() if df[col].dtype == 'object' else df[col]
+        
+        # Forward fill to handle hierarchical structure
         df['System'] = df['System'].ffill()
         df['Subsystem'] = df['Subsystem'].ffill()
+        
+        # Remove rows with missing critical data
         df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
+        
+        # Fill remaining NaNs with empty strings
         df = df.fillna("")
+        
+        # Additional trim after fillna
+        for col in df.columns:
+            if col not in ['System', 'Subsystem', 'Component', 'Failure Mode']:
+                df[col] = df[col].astype(str).str.strip()
         
         # Insert each row
         count = 0
+        duplicate_count = 0
         for idx, row in df.iterrows():
             try:
+                # Clean values one more time
+                sys_val = str(row.get("System", "")).strip()
+                sub_val = str(row.get("Subsystem", "")).strip()
+                comp_val = str(row.get("Component", "")).strip()
+                fm_val = str(row.get("Failure Mode", "")).strip()
+                action_val = str(row.get("Recommended Action", "")).strip()
+                fc_val = str(row.get("Failure Code", "")).strip()
+                cc_val = str(row.get("Cause Code", "")).strip()
+                rc_val = str(row.get("Resolution Code", "")).strip()
+                
                 conn.execute(text("""
                     INSERT INTO catalogue (system, subsystem, component, failure_mode, 
                                          recommended_action, failure_code, cause_code, resolution_code)
                     VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
                 """), {
-                    "sys": str(row.get("System", "")).strip(),
-                    "sub": str(row.get("Subsystem", "")).strip(),
-                    "comp": str(row.get("Component", "")).strip(),
-                    "fm": str(row.get("Failure Mode", "")).strip(),
-                    "action": str(row.get("Recommended Action", "")).strip(),
-                    "fc": str(row.get("Failure Code", "")).strip(),
-                    "cc": str(row.get("Cause Code", "")).strip(),
-                    "rc": str(row.get("Resolution Code", "")).strip()
+                    "sys": sys_val,
+                    "sub": sub_val,
+                    "comp": comp_val,
+                    "fm": fm_val,
+                    "action": action_val,
+                    "fc": fc_val,
+                    "cc": cc_val,
+                    "rc": rc_val
                 })
                 count += 1
             except Exception as e:
-                pass  # Skip duplicates or errors
+                duplicate_count += 1  # Skip duplicates or errors
         
-        st.success(f"✓ Loaded {count} catalogue entries into database")
+        # Verify load
+        result = conn.execute(text("SELECT COUNT(*) FROM catalogue"))
+        total_in_db = result.scalar()
+        
+        st.success(f"✅ Loaded {count} catalogue entries (Total in DB: {total_in_db})")
+        
+        # Show systems loaded
+        systems_result = conn.execute(text("SELECT DISTINCT system FROM catalogue ORDER BY system"))
+        systems = [r[0] for r in systems_result if r[0]]
+        st.info(f"✅ Systems loaded: {len(systems)} unique systems")
         
     except Exception as e:
         st.error(f"❌ Error loading catalogue: {str(e)}")
@@ -852,6 +887,10 @@ def page_work_orders():
         st.divider()
         st.subheader("Fault Classification")
         
+        # DEBUG: Show available systems count
+        available_systems = list_systems()
+        st.info(f"ℹ️ {len(available_systems)} systems available in catalogue. Showing first 20 in dropdown.", icon="ℹ️")
+        
         col1, col2, col3, col4 = st.columns(4)
         
         # Cascading dropdowns
@@ -1048,7 +1087,7 @@ def page_catalogue():
     """FRACAS Catalogue page."""
     st.header("📚 FRACAS Codes Catalogue")
     
-    tab1, tab2 = st.tabs(["Browse Catalogue", "Status"])
+    tab1, tab2, tab3 = st.tabs(["Browse Catalogue", "Status", "Diagnostics"])
     
     with tab1:
         st.subheader("Current Catalogue")
@@ -1107,6 +1146,68 @@ def page_catalogue():
             "System": system_counts.index,
             "Count": system_counts.values
         }), use_container_width=True)
+    
+    with tab3:
+        st.subheader("Diagnostics & Data Verification")
+        
+        st.write("**Use this tab to verify the catalogue is fully loaded**")
+        
+        engine = get_engine()
+        
+        # Check raw database
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM catalogue"))
+            total_count = result.scalar()
+            
+            result = conn.execute(text("SELECT DISTINCT system FROM catalogue ORDER BY system"))
+            all_systems = [r[0] for r in result]
+        
+        st.write(f"### Database Status")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Catalogue Entries in DB", total_count)
+        with col2:
+            st.metric("Unique Systems in DB", len(all_systems))
+        
+        st.divider()
+        st.write("### All Systems in Database")
+        
+        if all_systems:
+            systems_data = []
+            for system in all_systems:
+                with engine.connect() as conn:
+                    result = conn.execute(
+                        text("SELECT COUNT(*) FROM catalogue WHERE system = :sys"),
+                        {"sys": system}
+                    )
+                    count = result.scalar()
+                systems_data.append({"System": system, "Entries": count})
+            
+            st.dataframe(pd.DataFrame(systems_data), use_container_width=True)
+            
+            st.success(f"✅ All {len(all_systems)} systems are in the database!")
+        else:
+            st.error("❌ No systems found in database. The catalogue may not have loaded correctly.")
+            st.warning("Solution: Delete `/tmp/amic_fracas.db` and refresh the page")
+        
+        st.divider()
+        st.write("### Dropdown Test")
+        
+        test_system = st.selectbox("Test System Selection", all_systems if all_systems else ["No systems found"])
+        
+        if test_system and test_system != "No systems found":
+            subsystems = list_subsystems(test_system)
+            st.write(f"✅ System '{test_system}' has {len(subsystems)} subsystems")
+            
+            if subsystems:
+                test_subsystem = st.selectbox("Test Subsystem Selection", subsystems)
+                components = list_components(test_system, test_subsystem)
+                st.write(f"✅ Subsystem '{test_subsystem}' has {len(components)} components")
+                
+                if components:
+                    test_component = st.selectbox("Test Component Selection", components)
+                    failure_modes = list_failure_modes(test_system, test_subsystem, test_component)
+                    st.write(f"✅ Component '{test_component}' has {len(failure_modes)} failure modes")
 
 # ============================================================================
 # PAGE: FRACAS CASES (Simplified)
