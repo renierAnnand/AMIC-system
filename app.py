@@ -41,7 +41,13 @@ if "current_role" not in st.session_state:
 # DATABASE SETUP
 # ============================================================================
 
-DB_FILE = "/home/claude/amic_fracas.db"
+import os
+
+# Use /tmp for Streamlit Cloud, local path for development
+if os.path.exists('/tmp'):
+    DB_FILE = "/tmp/amic_fracas.db"
+else:
+    DB_FILE = "./amic_fracas.db"
 
 @st.cache_resource
 def get_engine():
@@ -49,7 +55,8 @@ def get_engine():
     engine = create_engine(
         f"sqlite:///{DB_FILE}",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool
+        poolclass=StaticPool,
+        echo=False
     )
     return engine
 
