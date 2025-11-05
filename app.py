@@ -194,11 +194,26 @@ def init_db():
             )
         """))
     
-    # Check if data seeded
+    # Check if data needs seeding
     with engine.begin() as conn:
         result = conn.execute(text("SELECT COUNT(*) FROM vehicles"))
-        if result.scalar() == 0:
-            seed_data(engine)
+        vehicles_count = result.scalar()
+        
+        result = conn.execute(text("SELECT COUNT(*) FROM catalogue"))
+        catalogue_count = result.scalar()
+    
+    # Always seed if empty
+    if vehicles_count == 0:
+        seed_data(engine)
+    
+    # IMPORTANT: Always check and load catalogue if empty
+    if catalogue_count == 0:
+        print("\n" + "="*60)
+        print("CATALOGUE IS EMPTY - LOADING NOW")
+        print("="*60)
+        with engine.begin() as conn:
+            load_catalogue_from_excel_to_db(conn)
+        print("="*60 + "\n")
 
 def seed_data(engine):
     """Seed database with demo data and complete catalogue."""
@@ -288,9 +303,6 @@ def seed_data(engine):
                 """INSERT OR REPLACE INTO rules_config (rule_id, name, enabled, params, severity)
                    VALUES (:rid, :name, :enabled, :params, :sev)"""
             ), {"rid": rule[0], "name": rule[1], "enabled": rule[2], "params": rule[3], "sev": rule[4]})
-        
-        # ===== FIXED: Load catalogue from Excel immediately =====
-        load_catalogue_from_excel_to_db(conn)
 
 def load_catalogue_from_excel_to_db(conn):
     """Load FRACAS catalogue from Excel file directly into database connection."""
@@ -299,11 +311,12 @@ def load_catalogue_from_excel_to_db(conn):
         excel_path = '/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx'
         
         if not os.path.exists(excel_path):
-            st.warning(f"⚠️ Catalogue file not found at {excel_path}")
-            return
+            print(f"ERROR: Catalogue file not found at {excel_path}")
+            return False
         
+        print(f"Loading catalogue from: {excel_path}")
         df = pd.read_excel(excel_path, sheet_name="FRACAS_FailureMode_Catalogue")
-        st.write(f"✓ Loading catalogue with {len(df)} entries...")
+        print(f"Loaded {len(df)} rows from Excel")
         
         # IMPROVED: Better data cleaning with whitespace trimming
         # First, trim all string columns of leading/trailing whitespace
@@ -317,6 +330,7 @@ def load_catalogue_from_excel_to_db(conn):
         
         # Remove rows with missing critical data
         df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
+        print(f"After cleanup: {len(df)} rows")
         
         # Fill remaining NaNs with empty strings
         df = df.fillna("")
@@ -328,7 +342,7 @@ def load_catalogue_from_excel_to_db(conn):
         
         # Insert each row
         count = 0
-        duplicate_count = 0
+        errors = 0
         for idx, row in df.iterrows():
             try:
                 # Clean values one more time
@@ -357,21 +371,29 @@ def load_catalogue_from_excel_to_db(conn):
                 })
                 count += 1
             except Exception as e:
-                duplicate_count += 1  # Skip duplicates or errors
+                errors += 1
+        
+        print(f"Inserted {count} rows, {errors} errors")
         
         # Verify load
         result = conn.execute(text("SELECT COUNT(*) FROM catalogue"))
         total_in_db = result.scalar()
-        
-        st.success(f"✅ Loaded {count} catalogue entries (Total in DB: {total_in_db})")
+        print(f"Total in database: {total_in_db}")
         
         # Show systems loaded
         systems_result = conn.execute(text("SELECT DISTINCT system FROM catalogue ORDER BY system"))
         systems = [r[0] for r in systems_result if r[0]]
-        st.info(f"✅ Systems loaded: {len(systems)} unique systems")
+        print(f"Loaded {len(systems)} unique systems")
+        for i, sys in enumerate(systems, 1):
+            print(f"  {i}. {sys}")
+        
+        return True
         
     except Exception as e:
-        st.error(f"❌ Error loading catalogue: {str(e)}")
+        print(f"ERROR loading catalogue: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -1526,6 +1548,17 @@ def main():
     
     # Initialize database
     init_db()
+    
+    # Show startup status
+    engine = get_engine()
+    with engine.connect() as conn:
+        cat_count = conn.execute(text("SELECT COUNT(*) FROM catalogue")).scalar()
+        sys_count = conn.execute(text("SELECT COUNT(DISTINCT system) FROM catalogue")).scalar() if cat_count > 0 else 0
+    
+    if cat_count > 0:
+        st.sidebar.success(f"✅ Catalogue loaded: {cat_count} entries, {sys_count} systems")
+    else:
+        st.sidebar.error(f"❌ Catalogue NOT loaded (0 entries)")
     
     st.markdown("""
     <style>
