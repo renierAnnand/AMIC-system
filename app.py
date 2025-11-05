@@ -286,27 +286,41 @@ def seed_data(engine):
                    VALUES (:rid, :name, :enabled, :params, :sev)"""
             ), {"rid": rule[0], "name": rule[1], "enabled": rule[2], "params": rule[3], "sev": rule[4]})
         
-        # Seed catalogue from Excel file
+        # Seed catalogue from Excel file - LOAD THE NEW COMPREHENSIVE CATALOGUE
         try:
-            df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v3_AllComponents.xlsx', 
-                              sheet_name="FRACAS_FailureMode_Catalogue")
+            # Try to load the new comprehensive catalogue first
+            try:
+                df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
+                                  sheet_name="FRACAS_FailureMode_Catalogue")
+                st.write("")  # Silent success
+            except:
+                # Fallback to v3 if v5 not found
+                df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v3_AllComponents.xlsx', 
+                                  sheet_name="FRACAS_FailureMode_Catalogue")
             
             # Forward fill NaN values for System and Subsystem
-            df['System'] = df['System'].fillna(method='ffill')
-            df['Subsystem'] = df['Subsystem'].fillna(method='ffill')
+            df['System'] = df['System'].ffill()
+            df['Subsystem'] = df['Subsystem'].ffill()
             
             # Remove rows where all key fields are NaN
             df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
             df = df.fillna("")
             
-            # Generate codes
-            df["failure_code"] = df["System"].str[:2].str.upper() + "-" + \
-                                  df["Component"].str[:3].str.upper() + \
-                                  df.index.astype(str).str.zfill(3)
-            df["cause_code"] = df["Subsystem"].str[:2].str.upper() + "C" + \
-                               df.index.astype(str).str.zfill(3)
-            df["resolution_code"] = "RES-" + df.index.astype(str).str.zfill(4)
+            # Use existing codes if present, otherwise generate
+            if 'Failure Code' not in df.columns or df['Failure Code'].isna().all():
+                df["Failure Code"] = df["System"].str[:2].str.upper() + "-" + \
+                                      df["Component"].str[:3].str.upper() + "-" + \
+                                      df.index.astype(str).str.zfill(3)
             
+            if 'Cause Code' not in df.columns or df['Cause Code'].isna().all():
+                df["Cause Code"] = df["Subsystem"].str[:2].str.upper() + "-" + \
+                                   df["Component"].str[:2].str.upper() + "-C" + \
+                                   df.index.astype(str).str.zfill(3)
+            
+            if 'Resolution Code' not in df.columns or df['Resolution Code'].isna().all():
+                df["Resolution Code"] = "RES-" + df.index.astype(str).str.zfill(4)
+            
+            # Insert all rows
             for idx, row in df.iterrows():
                 try:
                     conn.execute(text("""
@@ -314,14 +328,14 @@ def seed_data(engine):
                                              recommended_action, failure_code, cause_code, resolution_code)
                         VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
                     """), {
-                        "sys": row.get("System", ""),
-                        "sub": row.get("Subsystem", ""),
-                        "comp": row.get("Component", ""),
-                        "fm": row.get("Failure Mode", ""),
-                        "action": row.get("Recommended Action", ""),
-                        "fc": row.get("failure_code", ""),
-                        "cc": row.get("cause_code", ""),
-                        "rc": row.get("resolution_code", "")
+                        "sys": str(row.get("System", "")).strip(),
+                        "sub": str(row.get("Subsystem", "")).strip(),
+                        "comp": str(row.get("Component", "")).strip(),
+                        "fm": str(row.get("Failure Mode", "")).strip(),
+                        "action": str(row.get("Recommended Action", "")).strip(),
+                        "fc": str(row.get("Failure Code", "")).strip(),
+                        "cc": str(row.get("Cause Code", "")).strip(),
+                        "rc": str(row.get("Resolution Code", "")).strip()
                     })
                 except Exception as e:
                     pass  # Skip duplicate or invalid rows
@@ -329,12 +343,12 @@ def seed_data(engine):
         except Exception as e:
             # Fallback to basic catalogue if file not found
             catalogue_data = [
-                ("Engine", "Powertrain", "Engine Block", "Engine Knock", "Check engine oil and fuel quality", "ENG-001", "C-001", "RES-001"),
-                ("Engine", "Powertrain", "Engine Block", "White Smoke", "Check and replace piston rings", "ENG-002", "C-002", "RES-002"),
-                ("Engine", "Powertrain", "Air Filter", "Low Power", "Clean or replace air filter", "ENG-003", "C-003", "RES-003"),
-                ("Brakes", "Brake System", "Brake Pads", "Squeaking", "Inspect and replace brake pads", "BRK-001", "C-005", "RES-005"),
-                ("Electrical", "Battery", "Battery", "Won't Start", "Test battery and alternator", "ELC-001", "C-008", "RES-008"),
-                ("HVAC", "Cooling", "Compressor", "No Cold Air", "Recharge refrigerant or replace compressor", "HVC-001", "C-012", "RES-012"),
+                ("Engine", "Powertrain", "Engine Block", "Engine Knock", "Check engine oil and fuel quality", "ENG-001", "ENG-ENG-C001", "RES-001"),
+                ("Engine", "Powertrain", "Engine Block", "White Smoke", "Check and replace piston rings", "ENG-002", "ENG-ENG-C002", "RES-002"),
+                ("Engine", "Powertrain", "Air Filter", "Low Power", "Clean or replace air filter", "ENG-003", "ENG-AF-C003", "RES-003"),
+                ("Brakes", "Brake System", "Brake Pads", "Squeaking", "Inspect and replace brake pads", "BRK-001", "BRK-BP-C005", "RES-005"),
+                ("Electrical", "Battery", "Battery", "Won't Start", "Test battery and alternator", "ELC-001", "ELC-BA-C008", "RES-008"),
+                ("HVAC", "Cooling", "Compressor", "No Cold Air", "Recharge refrigerant or replace compressor", "HVC-001", "HVC-CO-C012", "RES-012"),
             ]
             
             for cat in catalogue_data:
@@ -358,20 +372,31 @@ def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
     
     try:
         df = pd.read_excel(file_path, sheet_name="FRACAS_FailureMode_Catalogue")
+        
+        # Forward fill NaN values for System and Subsystem
+        df['System'] = df['System'].ffill()
+        df['Subsystem'] = df['Subsystem'].ffill()
+        
         df = df.dropna(subset=["System", "Subsystem", "Component", "Failure Mode"])
         df = df.fillna("")
         
-        # Generate codes if not present
-        df["failure_code"] = df["System"].str[:2].str.upper() + "-" + \
-                              df["Component"].str[:3].str.upper() + \
-                              df.index.astype(str).str.zfill(3)
-        df["cause_code"] = df["Subsystem"].str[:2].str.upper() + "C" + \
-                           df.index.astype(str).str.zfill(3)
-        df["resolution_code"] = "RES-" + df.index.astype(str).str.zfill(4)
+        # Use existing codes if present, otherwise generate
+        if 'Failure Code' not in df.columns or df['Failure Code'].isna().all():
+            df["Failure Code"] = df["System"].str[:2].str.upper() + "-" + \
+                                  df["Component"].str[:3].str.upper() + "-" + \
+                                  df.index.astype(str).str.zfill(3)
+        
+        if 'Cause Code' not in df.columns or df['Cause Code'].isna().all():
+            df["Cause Code"] = df["Subsystem"].str[:2].str.upper() + "-" + \
+                               df["Component"].str[:2].str.upper() + "-C" + \
+                               df.index.astype(str).str.zfill(3)
+        
+        if 'Resolution Code' not in df.columns or df['Resolution Code'].isna().all():
+            df["Resolution Code"] = "RES-" + df.index.astype(str).str.zfill(4)
         
         # Get required columns with defaults
         columns_to_use = ["System", "Subsystem", "Component", "Failure Mode", 
-                         "Recommended Action", "failure_code", "cause_code", "resolution_code"]
+                         "Recommended Action", "Failure Code", "Cause Code", "Resolution Code"]
         
         df_cleaned = df[columns_to_use].copy()
         
@@ -384,20 +409,23 @@ def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
                 # Check duplicate key
                 dup_key = f"{row['System']}-{row['Subsystem']}-{row['Component']}-{row['Failure Mode']}"
                 
-                conn.execute(text("""
-                    INSERT INTO catalogue (system, subsystem, component, failure_mode, 
-                                         recommended_action, failure_code, cause_code, resolution_code)
-                    VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
-                """), {
-                    "sys": row["System"],
-                    "sub": row["Subsystem"],
-                    "comp": row["Component"],
-                    "fm": row["Failure Mode"],
-                    "action": row["Recommended Action"],
-                    "fc": row["failure_code"],
-                    "cc": row["cause_code"],
-                    "rc": row["resolution_code"]
-                })
+                try:
+                    conn.execute(text("""
+                        INSERT INTO catalogue (system, subsystem, component, failure_mode, 
+                                             recommended_action, failure_code, cause_code, resolution_code)
+                        VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
+                    """), {
+                        "sys": str(row["System"]).strip(),
+                        "sub": str(row["Subsystem"]).strip(),
+                        "comp": str(row["Component"]).strip(),
+                        "fm": str(row["Failure Mode"]).strip(),
+                        "action": str(row["Recommended Action"]).strip(),
+                        "fc": str(row["Failure Code"]).strip(),
+                        "cc": str(row["Cause Code"]).strip(),
+                        "rc": str(row["Resolution Code"]).strip()
+                    })
+                except Exception as e:
+                    duplicates.append(dup_key)
         
         return len(df_cleaned), duplicates
     
@@ -1829,32 +1857,50 @@ def page_data_quality():
                 with st.form("fix_codes_form"):
                     st.write(f"WO: {selected_wo} | {wo.get('system', '')} / {wo.get('component', '')} / {wo.get('failure_mode', '')}")
                     
+                    # Initialize session state for this form
+                    if "dq_system" not in st.session_state:
+                        st.session_state.dq_system = wo.get("system", "")
+                    if "dq_subsystem" not in st.session_state:
+                        st.session_state.dq_subsystem = wo.get("subsystem", "")
+                    if "dq_component" not in st.session_state:
+                        st.session_state.dq_component = wo.get("component", "")
+                    if "dq_failure_mode" not in st.session_state:
+                        st.session_state.dq_failure_mode = wo.get("failure_mode", "")
+                    
                     # Get cascade options
                     systems = [""] + list_systems()
-                    system = st.selectbox("System", systems, index=systems.index(wo.get("system", "")) if wo.get("system") in systems else 0)
+                    dq_system = st.selectbox("System", systems, 
+                                            index=systems.index(st.session_state.dq_system) if st.session_state.dq_system in systems else 0,
+                                            key="dq_sys")
                     
-                    subsystems = []
-                    if system:
-                        subsystems = [""] + list_subsystems(system)
-                    subsystem = st.selectbox("Subsystem", subsystems)
+                    dq_subsystems = [""]
+                    if dq_system:
+                        dq_subsystems = [""] + list_subsystems(dq_system)
+                    dq_subsystem = st.selectbox("Subsystem", dq_subsystems,
+                                               index=dq_subsystems.index(st.session_state.dq_subsystem) if st.session_state.dq_subsystem in dq_subsystems else 0,
+                                               key="dq_subsys")
                     
-                    components = []
-                    if system and subsystem:
-                        components = [""] + list_components(system, subsystem)
-                    component = st.selectbox("Component", components)
+                    dq_components = [""]
+                    if dq_system and dq_subsystem:
+                        dq_components = [""] + list_components(dq_system, dq_subsystem)
+                    dq_component = st.selectbox("Component", dq_components,
+                                               index=dq_components.index(st.session_state.dq_component) if st.session_state.dq_component in dq_components else 0,
+                                               key="dq_comp")
                     
-                    failure_modes = []
-                    if system and subsystem and component:
-                        failure_modes = [""] + list_failure_modes(system, subsystem, component)
-                    failure_mode = st.selectbox("Failure Mode", failure_modes)
+                    dq_failure_modes = [""]
+                    if dq_system and dq_subsystem and dq_component:
+                        dq_failure_modes = [""] + list_failure_modes(dq_system, dq_subsystem, dq_component)
+                    dq_failure_mode = st.selectbox("Failure Mode", dq_failure_modes,
+                                                  index=dq_failure_modes.index(st.session_state.dq_failure_mode) if st.session_state.dq_failure_mode in dq_failure_modes else 0,
+                                                  key="dq_fm")
                     
                     if st.form_submit_button("✅ Update Codes"):
-                        if failure_mode:
-                            cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
-                            wo["system"] = system
-                            wo["subsystem"] = subsystem
-                            wo["component"] = component
-                            wo["failure_mode"] = failure_mode
+                        if dq_failure_mode:
+                            cat_row = get_catalogue_row(dq_system, dq_subsystem, dq_component, dq_failure_mode)
+                            wo["system"] = dq_system
+                            wo["subsystem"] = dq_subsystem
+                            wo["component"] = dq_component
+                            wo["failure_mode"] = dq_failure_mode
                             wo["failure_code"] = cat_row.get("failure_code")
                             wo["cause_code"] = cat_row.get("cause_code")
                             wo["resolution_code"] = cat_row.get("resolution_code")
