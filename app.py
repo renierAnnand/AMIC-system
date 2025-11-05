@@ -987,140 +987,154 @@ def page_work_orders():
     with tab1:
         st.subheader("Create or Edit Work Order")
         
-        with st.form("work_order_form"):
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                created_dt = st.date_input("Created Date", datetime.now())
-                created_by = st.selectbox("Created By", get_users_list())
-                workshop = st.selectbox("Workshop", get_workshops_list())
-            
-            with col2:
-                assigned_to = st.selectbox("Assigned To", [""] + get_users_list())
-                sector = st.text_input("Sector")
-                status = st.selectbox("Status", ["Open", "In Progress", "Completed", "Closed"])
-            
-            with col3:
-                completed_dt = None
-                if status in ["Completed", "Closed"]:
-                    completed_dt = st.date_input("Completion Date", datetime.now())
-                else:
-                    st.text_input("Completion Date (disabled)", value="", disabled=True)
-            
-            st.divider()
-            
-            # Vehicle selection
-            col1, col2 = st.columns(2)
-            with col1:
-                vehicle_mode = st.radio("Find Vehicle by:", ["Vehicle ID", "VIN"])
-            
-            vehicles_df = get_vehicles_list()
-            vehicle_dict = {row["vehicle_id"]: f"{row['vehicle_id']} - {row['make']} {row['model']} ({row['year']})" 
-                          for _, row in vehicles_df.iterrows()}
-            vin_dict = {row["vin"]: f"{row['vin']} - {row['vehicle_id']}" 
-                       for _, row in vehicles_df.iterrows()}
-            
-            vehicle_id = None
-            vin = None
-            with col1:
-                if vehicle_mode == "Vehicle ID":
-                    selected_display = st.selectbox("Select Vehicle", [""] + list(vehicle_dict.values()))
-                    if selected_display:
-                        vehicle_id = selected_display.split(" - ")[0]
-                        vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0]
-                else:
-                    selected_display = st.selectbox("Select by VIN", [""] + list(vin_dict.values()))
-                    if selected_display:
-                        vin = selected_display.split(" - ")[0]
-                        vehicle_id = selected_display.split(" - ")[1]
-            
-            st.divider()
-            st.subheader("Fault Classification")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            system = None
-            subsystem = None
-            component = None
-            failure_mode = None
-            
-            with col1:
-                systems = [""] + list_systems()
-                system = st.selectbox("System", systems, key="sys_select")
-            
-            # *** KEY FIX: Call the functions directly without caching
-            with col2:
-                subsystems = []
-                if system:
-                    subsystems = [""] + list_subsystems(system)
-                subsystem = st.selectbox("Subsystem", subsystems, key="subsys_select")
-            
-            with col3:
-                components = []
-                if system and subsystem:
-                    components = [""] + list_components(system, subsystem)
-                component = st.selectbox("Component", components, key="comp_select")
-            
-            with col4:
-                failure_modes = []
-                if system and subsystem and component:
-                    failure_modes = [""] + list_failure_modes(system, subsystem, component)
-                failure_mode = st.selectbox("Failure Mode", failure_modes, key="fm_select")
-            
-            # Auto-fill codes
-            recommended_action = ""
-            failure_code = ""
-            cause_code = ""
-            resolution_code = ""
-            
-            if failure_mode and system and subsystem and component:
-                cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
-                recommended_action = cat_row.get("recommended_action", "")
-                failure_code = cat_row.get("failure_code", "")
-                cause_code = cat_row.get("cause_code", "")
-                resolution_code = cat_row.get("resolution_code", "")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.text_input("Recommended Action (auto-filled)", value=recommended_action, disabled=True)
-            
-            st.divider()
-            st.subheader("Codes (Auto-filled from Catalogue)")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.text_input("Failure Code", value=failure_code, disabled=True)
-            with col2:
-                st.text_input("Cause Code", value=cause_code, disabled=True)
-            with col3:
-                st.text_input("Resolution Code", value=resolution_code, disabled=True)
-            
-            st.divider()
-            st.subheader("Cause & Action Details")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                cause_text = st.text_area("Cause Text", height=100)
-            with col2:
-                action_text = st.text_area("Action Text", height=100)
-            
-            notes = st.text_area("Additional Notes", height=80)
-            
-            st.divider()
-            st.subheader("Costs & Downtime")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                labor_hours = st.number_input("Labor Hours", value=0.0, min_value=0.0)
-            with col2:
-                parts_cost = st.number_input("Parts Cost ($)", value=0.0, min_value=0.0)
-            with col3:
-                downtime_hours = st.number_input("Downtime Hours", value=0.0, min_value=0.0)
-            with col4:
-                attachments_n = st.number_input("Attachments", value=0, min_value=0)
-            
-            st.divider()
-            
+        # Initialize session state for cascading dropdowns
+        if "selected_system" not in st.session_state:
+            st.session_state.selected_system = ""
+        if "selected_subsystem" not in st.session_state:
+            st.session_state.selected_subsystem = ""
+        if "selected_component" not in st.session_state:
+            st.session_state.selected_component = ""
+        if "selected_failure_mode" not in st.session_state:
+            st.session_state.selected_failure_mode = ""
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            created_dt = st.date_input("Created Date", datetime.now())
+            created_by = st.selectbox("Created By", get_users_list())
+            workshop = st.selectbox("Workshop", get_workshops_list())
+        
+        with col2:
+            assigned_to = st.selectbox("Assigned To", [""] + get_users_list())
+            sector = st.text_input("Sector")
+            status = st.selectbox("Status", ["Open", "In Progress", "Completed", "Closed"])
+        
+        with col3:
+            completed_dt = None
+            if status in ["Completed", "Closed"]:
+                completed_dt = st.date_input("Completion Date", datetime.now())
+            else:
+                st.text_input("Completion Date (disabled)", value="", disabled=True)
+        
+        st.divider()
+        
+        # Vehicle selection
+        col1, col2 = st.columns(2)
+        with col1:
+            vehicle_mode = st.radio("Find Vehicle by:", ["Vehicle ID", "VIN"])
+        
+        vehicles_df = get_vehicles_list()
+        vehicle_dict = {row["vehicle_id"]: f"{row['vehicle_id']} - {row['make']} {row['model']} ({row['year']})" 
+                      for _, row in vehicles_df.iterrows()}
+        vin_dict = {row["vin"]: f"{row['vin']} - {row['vehicle_id']}" 
+                   for _, row in vehicles_df.iterrows()}
+        
+        vehicle_id = None
+        vin = None
+        with col1:
+            if vehicle_mode == "Vehicle ID":
+                selected_display = st.selectbox("Select Vehicle", [""] + list(vehicle_dict.values()))
+                if selected_display:
+                    vehicle_id = selected_display.split(" - ")[0]
+                    vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0]
+            else:
+                selected_display = st.selectbox("Select by VIN", [""] + list(vin_dict.values()))
+                if selected_display:
+                    vin = selected_display.split(" - ")[0]
+                    vehicle_id = selected_display.split(" - ")[1]
+        
+        st.divider()
+        st.subheader("Fault Classification")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # *** FIXED: Use session state for cascading dropdowns outside form ***
+        with col1:
+            systems = [""] + list_systems()
+            system = st.selectbox("System", systems, key="sys_select", 
+                                on_change=lambda: st.session_state.update({"selected_system": st.session_state.sys_select, "selected_subsystem": "", "selected_component": "", "selected_failure_mode": ""}))
+            st.session_state.selected_system = system
+        
+        with col2:
+            subsystems = [""]
+            if system:
+                subsystems = [""] + list_subsystems(system)
+            subsystem = st.selectbox("Subsystem", subsystems, key="subsys_select",
+                                   on_change=lambda: st.session_state.update({"selected_subsystem": st.session_state.subsys_select, "selected_component": "", "selected_failure_mode": ""}))
+            st.session_state.selected_subsystem = subsystem
+        
+        with col3:
+            components = [""]
+            if system and subsystem:
+                components = [""] + list_components(system, subsystem)
+            component = st.selectbox("Component", components, key="comp_select",
+                                    on_change=lambda: st.session_state.update({"selected_component": st.session_state.comp_select, "selected_failure_mode": ""}))
+            st.session_state.selected_component = component
+        
+        with col4:
+            failure_modes = [""]
+            if system and subsystem and component:
+                failure_modes = [""] + list_failure_modes(system, subsystem, component)
+            failure_mode = st.selectbox("Failure Mode", failure_modes, key="fm_select",
+                                       on_change=lambda: st.session_state.update({"selected_failure_mode": st.session_state.fm_select}))
+            st.session_state.selected_failure_mode = failure_mode
+        
+        # Auto-fill codes
+        recommended_action = ""
+        failure_code = ""
+        cause_code = ""
+        resolution_code = ""
+        
+        if failure_mode and system and subsystem and component:
+            cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
+            recommended_action = cat_row.get("recommended_action", "")
+            failure_code = cat_row.get("failure_code", "")
+            cause_code = cat_row.get("cause_code", "")
+            resolution_code = cat_row.get("resolution_code", "")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input("Recommended Action (auto-filled)", value=recommended_action, disabled=True)
+        
+        st.divider()
+        st.subheader("Codes (Auto-filled from Catalogue)")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.text_input("Failure Code", value=failure_code, disabled=True)
+        with col2:
+            st.text_input("Cause Code", value=cause_code, disabled=True)
+        with col3:
+            st.text_input("Resolution Code", value=resolution_code, disabled=True)
+        
+        st.divider()
+        st.subheader("Cause & Action Details")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            cause_text = st.text_area("Cause Text", height=100)
+        with col2:
+            action_text = st.text_area("Action Text", height=100)
+        
+        notes = st.text_area("Additional Notes", height=80)
+        
+        st.divider()
+        st.subheader("Costs & Downtime")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            labor_hours = st.number_input("Labor Hours", value=0.0, min_value=0.0)
+        with col2:
+            parts_cost = st.number_input("Parts Cost ($)", value=0.0, min_value=0.0)
+        with col3:
+            downtime_hours = st.number_input("Downtime Hours", value=0.0, min_value=0.0)
+        with col4:
+            attachments_n = st.number_input("Attachments", value=0, min_value=0)
+        
+        st.divider()
+        
+        # Only wrap the submit button in a form
+        with st.form("work_order_submit_form"):
             submitted = st.form_submit_button("💾 Save Work Order", use_container_width=True)
             
             if submitted:
