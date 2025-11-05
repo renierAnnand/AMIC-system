@@ -285,7 +285,8 @@ def seed_data(engine):
             conn.execute(text(
                 """INSERT INTO vehicles (vehicle_id, vin, make, model, year, vehicle_type, 
                    owning_unit, in_service_dt, status) 
-                   VALUES (:vid, :vin, :make, :model, :year, :vtype, :ou, :isd, :status)"""
+                   VALUES (:vehicle_id, :vin, :make, :model, :year, :vehicle_type, 
+                   :owning_unit, :in_service_dt, :status)"""
             ), veh)
         
         for rule in rules_data:
