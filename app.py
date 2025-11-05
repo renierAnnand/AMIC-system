@@ -206,7 +206,7 @@ def init_db():
             seed_data(engine)
 
 def seed_data(engine):
-    """Seed database with demo data."""
+    """Seed database with demo data and complete catalogue."""
     
     # Seed workshops
     workshops_data = [
@@ -294,6 +294,73 @@ def seed_data(engine):
                 """INSERT OR REPLACE INTO rules_config (rule_id, name, enabled, params, severity)
                    VALUES (:rid, :name, :enabled, :params, :sev)"""
             ), {"rid": rule[0], "name": rule[1], "enabled": rule[2], "params": rule[3], "sev": rule[4]})
+        
+        # Seed catalogue from Excel file
+        try:
+            df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v3_AllComponents.xlsx', 
+                              sheet_name="FRACAS_FailureMode_Catalogue")
+            
+            # Forward fill NaN values for System and Subsystem
+            df['System'] = df['System'].fillna(method='ffill')
+            df['Subsystem'] = df['Subsystem'].fillna(method='ffill')
+            
+            # Remove rows where all key fields are NaN
+            df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
+            df = df.fillna("")
+            
+            # Generate codes
+            df["failure_code"] = df["System"].str[:2].str.upper() + "-" + \
+                                  df["Component"].str[:3].str.upper() + \
+                                  df.index.astype(str).str.zfill(3)
+            df["cause_code"] = df["Subsystem"].str[:2].str.upper() + "C" + \
+                               df.index.astype(str).str.zfill(3)
+            df["resolution_code"] = "RES-" + df.index.astype(str).str.zfill(4)
+            
+            for idx, row in df.iterrows():
+                try:
+                    conn.execute(text("""
+                        INSERT INTO catalogue (system, subsystem, component, failure_mode, 
+                                             recommended_action, failure_code, cause_code, resolution_code)
+                        VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
+                    """), {
+                        "sys": row.get("System", ""),
+                        "sub": row.get("Subsystem", ""),
+                        "comp": row.get("Component", ""),
+                        "fm": row.get("Failure Mode", ""),
+                        "action": row.get("Recommended Action", ""),
+                        "fc": row.get("failure_code", ""),
+                        "cc": row.get("cause_code", ""),
+                        "rc": row.get("resolution_code", "")
+                    })
+                except Exception as e:
+                    pass  # Skip duplicate or invalid rows
+        
+        except Exception as e:
+            # Fallback to basic catalogue if file not found
+            catalogue_data = [
+                ("Engine", "Powertrain", "Engine Block", "Engine Knock", "Check engine oil and fuel quality", "ENG-001", "C-001", "RES-001"),
+                ("Engine", "Powertrain", "Engine Block", "White Smoke", "Check and replace piston rings", "ENG-002", "C-002", "RES-002"),
+                ("Engine", "Powertrain", "Air Filter", "Low Power", "Clean or replace air filter", "ENG-003", "C-003", "RES-003"),
+                ("Brakes", "Brake System", "Brake Pads", "Squeaking", "Inspect and replace brake pads", "BRK-001", "C-005", "RES-005"),
+                ("Electrical", "Battery", "Battery", "Won't Start", "Test battery and alternator", "ELC-001", "C-008", "RES-008"),
+                ("HVAC", "Cooling", "Compressor", "No Cold Air", "Recharge refrigerant or replace compressor", "HVC-001", "C-012", "RES-012"),
+            ]
+            
+            for cat in catalogue_data:
+                conn.execute(text("""
+                    INSERT INTO catalogue (system, subsystem, component, failure_mode, 
+                                         recommended_action, failure_code, cause_code, resolution_code)
+                    VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
+                """), {
+                    "sys": cat[0],
+                    "sub": cat[1],
+                    "comp": cat[2],
+                    "fm": cat[3],
+                    "action": cat[4],
+                    "fc": cat[5],
+                    "cc": cat[6],
+                    "rc": cat[7]
+                })
 
 def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
     """Import FRACAS catalogue from Excel."""
