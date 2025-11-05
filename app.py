@@ -336,6 +336,147 @@ def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
     except Exception as e:
         return 0, [str(e)]
 
+def import_work_orders_from_excel(file_path: str) -> Tuple[int, List[str]]:
+    """Import work orders from Excel with proper mapping."""
+    engine = get_engine()
+    warnings = []
+    count = 0
+    
+    try:
+        # Try different sheet names and formats
+        sheet_name = None
+        excel_file = pd.ExcelFile(file_path)
+        
+        # Look for work order data (usually has wo_id, vehicle, system, etc.)
+        for sheet in excel_file.sheet_names:
+            df_test = pd.read_excel(file_path, sheet_name=sheet, nrows=1)
+            if len(df_test.columns) > 5:
+                sheet_name = sheet
+                break
+        
+        if sheet_name is None:
+            sheet_name = excel_file.sheet_names[0]
+        
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        
+        # Skip header rows (rows with description text)
+        df = df.iloc[1:].reset_index(drop=True)
+        df = df.dropna(how='all')
+        df = df.fillna("")
+        
+        # Get vehicles for linking
+        vehicles_df = get_vehicles_list()
+        vehicle_map = {v: vid for v, vid in zip(vehicles_df["vin"], vehicles_df["vehicle_id"])}
+        
+        users = get_users_list()
+        workshops = get_workshops_list()
+        
+        with engine.begin() as conn:
+            for idx, row in df.iterrows():
+                try:
+                    # Skip empty rows
+                    if len(row.astype(str).str.strip().unique()) <= 1:
+                        continue
+                    
+                    # Extract data with flexible column mapping
+                    vehicle_id = None
+                    system = None
+                    component = None
+                    failure_mode = None
+                    cause = None
+                    resolution = None
+                    
+                    # Try to map columns
+                    for col in df.columns:
+                        col_lower = str(col).lower()
+                        val = str(row[col]).strip() if pd.notna(row[col]) else ""
+                        
+                        if 'asset' in col_lower or 'vehicle' in col_lower:
+                            if val and val != "nan":
+                                vehicle_id = val if val.startswith("VEH") else list(vehicles_df["vehicle_id"].values)[0]
+                        elif 'system' in col_lower or 'group' in col_lower:
+                            if val and val != "nan":
+                                system = val
+                        elif 'component' in col_lower or 'name' in col_lower:
+                            if val and val != "nan":
+                                component = val
+                        elif 'failure' in col_lower and 'code' not in col_lower:
+                            if val and val != "nan":
+                                failure_mode = val
+                        elif 'cause' in col_lower and 'code' not in col_lower:
+                            if val and val != "nan":
+                                cause = val
+                        elif 'resolution' in col_lower and 'code' not in col_lower:
+                            if val and val != "nan":
+                                resolution = val
+                    
+                    # Use first vehicle if not found
+                    if not vehicle_id:
+                        vehicle_id = vehicles_df["vehicle_id"].iloc[0] if len(vehicles_df) > 0 else "VEH-0001"
+                    
+                    # Get vehicle info
+                    vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
+                    model = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["model"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
+                    vehicle_type = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vehicle_type"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
+                    owning_unit = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["owning_unit"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
+                    
+                    # Try to get codes from catalogue
+                    failure_code = ""
+                    cause_code = ""
+                    resolution_code = ""
+                    
+                    if system and component and failure_mode:
+                        cat_result = conn.execute(text("""
+                            SELECT failure_code, cause_code, resolution_code FROM catalogue 
+                            WHERE system = :sys AND component = :comp AND failure_mode = :fm 
+                            LIMIT 1
+                        """), {"sys": system, "comp": component, "fm": failure_mode})
+                        cat_row = cat_result.first()
+                        if cat_row:
+                            failure_code, cause_code, resolution_code = cat_row
+                    
+                    # Create work order
+                    wo_data = {
+                        "wo_id": next_id("WO", "work_orders", "wo_id"),
+                        "status": "Open",
+                        "created_dt": datetime.now().date(),
+                        "created_by": users[0] if users else "import",
+                        "workshop": workshops[0] if workshops else "Workshop A",
+                        "vehicle_id": vehicle_id,
+                        "vin": vin,
+                        "model": model,
+                        "vehicle_type": vehicle_type,
+                        "owning_unit": owning_unit,
+                        "system": system or "Unknown",
+                        "component": component or "Unknown",
+                        "failure_mode": failure_mode or "Unknown",
+                        "failure_code": failure_code,
+                        "cause_code": cause_code,
+                        "resolution_code": resolution_code,
+                        "cause_text": cause or "",
+                        "action_text": resolution or "",
+                        "notes": f"Imported from {file_path}",
+                        "labor_hours": 0,
+                        "parts_cost": 0,
+                        "total_cost": 0,
+                        "downtime_hours": 0
+                    }
+                    
+                    cols = ", ".join(wo_data.keys())
+                    placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
+                    conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
+                    
+                    count += 1
+                
+                except Exception as row_error:
+                    warnings.append(f"Row {idx + 2}: {str(row_error)[:50]}")
+        
+        st.cache_data.clear()
+        return count, warnings
+    
+    except Exception as e:
+        return 0, [f"Import error: {str(e)}"]
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -1755,15 +1896,112 @@ def page_admin():
     with tab4:
         st.subheader("Database Utilities")
         
+        st.write("**Import Work Orders from Excel**")
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🆕 Generate Demo Work Orders"):
-                st.info("This would generate 25 random demo WOs matching the catalogue.")
-                # Implementation: create random WOs
+            st.info("📤 Upload an Excel file with work order data. Columns can be flexible (System, Component, Failure, Cause, Resolution, Asset Group)")
+            uploaded_wo_file = st.file_uploader("Choose Excel file with work orders", type=["xlsx", "xls"], key="wo_import")
+            
+            if uploaded_wo_file:
+                if st.button("📥 Import Work Orders", use_container_width=True):
+                    with st.spinner("Importing work orders..."):
+                        file_path = f"/tmp/{uploaded_wo_file.name}"
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_wo_file.getbuffer())
+                        
+                        count, warnings = import_work_orders_from_excel(file_path)
+                        
+                        if count > 0:
+                            st.success(f"✅ Imported {count} work orders successfully!")
+                            if warnings:
+                                with st.expander("⚠️ Import Warnings"):
+                                    for warning in warnings[:10]:  # Show first 10
+                                        st.write(f"• {warning}")
+                        else:
+                            st.error(f"❌ No work orders imported")
+                            if warnings:
+                                st.error(f"Error: {warnings[0]}")
         
         with col2:
-            if st.button("⚠️ Reset Database (Danger Zone)", type="secondary"):
+            st.write("**Quick Actions**")
+            
+            if st.button("🆕 Generate 25 Demo Work Orders", use_container_width=True):
+                try:
+                    engine = get_engine()
+                    vehicles_df = get_vehicles_list()
+                    users = get_users_list()
+                    workshops = get_workshops_list()
+                    
+                    if len(vehicles_df) == 0:
+                        st.error("No vehicles available. Add vehicles first.")
+                    else:
+                        systems = list_systems()
+                        if systems:
+                            np.random.seed(datetime.now().microsecond)
+                            
+                            with engine.begin() as conn:
+                                for i in range(25):
+                                    vehicle_id = np.random.choice(vehicles_df["vehicle_id"].values)
+                                    vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0]
+                                    model = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["model"].iloc[0]
+                                    vehicle_type = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vehicle_type"].iloc[0]
+                                    owning_unit = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["owning_unit"].iloc[0]
+                                    
+                                    system = np.random.choice(systems)
+                                    subsystems = list_subsystems(system)
+                                    if subsystems:
+                                        subsystem = np.random.choice(subsystems)
+                                        components = list_components(system, subsystem)
+                                        if components:
+                                            component = np.random.choice(components)
+                                            failure_modes = list_failure_modes(system, subsystem, component)
+                                            if failure_modes:
+                                                failure_mode = np.random.choice(failure_modes)
+                                                cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
+                                                
+                                                wo_data = {
+                                                    "wo_id": next_id("WO", "work_orders", "wo_id"),
+                                                    "status": np.random.choice(["Open", "In Progress", "Completed"]),
+                                                    "created_dt": datetime.now().date() - timedelta(days=np.random.randint(0, 180)),
+                                                    "created_by": np.random.choice(users),
+                                                    "workshop": np.random.choice(workshops),
+                                                    "vehicle_id": vehicle_id,
+                                                    "vin": vin,
+                                                    "model": model,
+                                                    "vehicle_type": vehicle_type,
+                                                    "owning_unit": owning_unit,
+                                                    "system": system,
+                                                    "component": component,
+                                                    "failure_mode": failure_mode,
+                                                    "failure_code": cat_row.get("failure_code"),
+                                                    "cause_code": cat_row.get("cause_code"),
+                                                    "resolution_code": cat_row.get("resolution_code"),
+                                                    "labor_hours": np.random.uniform(0, 20),
+                                                    "parts_cost": np.random.uniform(0, 500),
+                                                    "total_cost": 0,
+                                                    "downtime_hours": np.random.uniform(0, 100)
+                                                }
+                                                
+                                                cols = ", ".join(wo_data.keys())
+                                                placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
+                                                conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
+                            
+                            st.success("✅ Generated 25 demo work orders")
+                            st.cache_data.clear()
+                        else:
+                            st.error("No systems in catalogue. Upload catalogue first.")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
+        
+        st.divider()
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            pass  # Spacer
+        
+        with col2:
+            if st.button("⚠️ Reset Database (Danger Zone)", type="secondary", use_container_width=True):
                 if st.checkbox("I understand this will delete all data"):
                     try:
                         with engine.begin() as conn:
