@@ -1,8 +1,8 @@
 """
 AMIC Work Order Management & FRACAS System - Streamlit Prototype
 Single-file app with SQLite backend, cascading dropdowns, rules engine, and dashboards.
+FIXED: Cascading dropdown issue resolved
 """
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,18 +17,15 @@ import altair as alt
 import io
 import hashlib
 from typing import List, Dict, Tuple, Optional
-
 # ============================================================================
 # CONFIG & SESSION STATE
 # ============================================================================
-
 st.set_page_config(
     page_title="AMIC FRACAS System",
     page_icon="🚗",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
 # Initialize session state
 if "app_initialized" not in st.session_state:
     st.session_state.app_initialized = False
@@ -36,19 +33,15 @@ if "current_user" not in st.session_state:
     st.session_state.current_user = "demo_tech"
 if "current_role" not in st.session_state:
     st.session_state.current_role = "Technician"
-
 # ============================================================================
 # DATABASE SETUP
 # ============================================================================
-
 import os
-
 # Use /tmp for Streamlit Cloud, local path for development
 if os.path.exists('/tmp'):
     DB_FILE = "/tmp/amic_fracas.db"
 else:
     DB_FILE = "./amic_fracas.db"
-
 @st.cache_resource
 def get_engine():
     """Get or create SQLAlchemy engine."""
@@ -59,7 +52,6 @@ def get_engine():
         echo=False
     )
     return engine
-
 def init_db():
     """Initialize database schema."""
     engine = get_engine()
@@ -204,7 +196,6 @@ def init_db():
         result = conn.execute(text("SELECT COUNT(*) FROM vehicles"))
         if result.scalar() == 0:
             seed_data(engine)
-
 def seed_data(engine):
     """Seed database with demo data and complete catalogue."""
     
@@ -361,7 +352,6 @@ def seed_data(engine):
                     "cc": cat[6],
                     "rc": cat[7]
                 })
-
 def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
     """Import FRACAS catalogue from Excel."""
     engine = get_engine()
@@ -413,7 +403,6 @@ def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
     
     except Exception as e:
         return 0, [str(e)]
-
 def import_work_orders_from_excel(file_path: str) -> Tuple[int, List[str]]:
     """Import work orders from Excel with proper mapping."""
     engine = get_engine()
@@ -554,11 +543,9 @@ def import_work_orders_from_excel(file_path: str) -> Tuple[int, List[str]]:
     
     except Exception as e:
         return 0, [f"Import error: {str(e)}"]
-
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
-
 @st.cache_data
 def next_id(prefix: str, table: str, col: str = "id") -> str:
     """Generate next incremental ID."""
@@ -576,7 +563,6 @@ def next_id(prefix: str, table: str, col: str = "id") -> str:
                 num = 1
         
         return f"{prefix}-{num:06d}"
-
 def list_systems() -> List[str]:
     """Get all systems from catalogue."""
     engine = get_engine()
@@ -584,9 +570,12 @@ def list_systems() -> List[str]:
         result = conn.execute(text("SELECT DISTINCT system FROM catalogue ORDER BY system"))
         return [r[0] for r in result if r[0]]
 
-@st.cache_data
+# *** FIX: REMOVED @st.cache_data DECORATOR *** 
+# These functions now refresh properly when called from forms
 def list_subsystems(system: str) -> List[str]:
     """Get subsystems for a system."""
+    if not system:
+        return []
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(
@@ -595,9 +584,10 @@ def list_subsystems(system: str) -> List[str]:
         )
         return [r[0] for r in result if r[0]]
 
-@st.cache_data
 def list_components(system: str, subsystem: str) -> List[str]:
     """Get components for subsystem."""
+    if not system or not subsystem:
+        return []
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(
@@ -607,9 +597,10 @@ def list_components(system: str, subsystem: str) -> List[str]:
         )
         return [r[0] for r in result if r[0]]
 
-@st.cache_data
 def list_failure_modes(system: str, subsystem: str, component: str) -> List[str]:
     """Get failure modes for component."""
+    if not system or not subsystem or not component:
+        return []
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(
@@ -639,33 +630,28 @@ def get_catalogue_row(system: str, subsystem: str, component: str, failure_mode:
                 "resolution_code": row[3]
             }
         return {"recommended_action": "", "failure_code": "", "cause_code": "", "resolution_code": ""}
-
 def get_all_catalogue() -> pd.DataFrame:
     """Get all catalogue entries."""
     engine = get_engine()
     query = "SELECT system, subsystem, component, failure_mode, recommended_action, failure_code, cause_code, resolution_code FROM catalogue ORDER BY system, subsystem, component, failure_mode"
     return pd.read_sql(query, engine)
-
 def get_vehicles_list() -> pd.DataFrame:
     """Get all vehicles."""
     engine = get_engine()
     query = "SELECT vehicle_id, vin, make, model, year, vehicle_type, owning_unit, status FROM vehicles ORDER BY vehicle_id"
     return pd.read_sql(query, engine)
-
 def get_users_list() -> List[str]:
     """Get user list."""
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT username FROM users ORDER BY username"))
         return [r[0] for r in result]
-
 def get_workshops_list() -> List[str]:
     """Get workshops."""
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT DISTINCT workshop FROM workshops ORDER BY workshop"))
         return [r[0] for r in result]
-
 def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
     """Save work order with validation."""
     engine = get_engine()
@@ -720,7 +706,6 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
         return True, f"Work Order saved: {wo_data.get('wo_id', 'created')}"
     except Exception as e:
         return False, f"Error saving: {str(e)}"
-
 def get_work_orders(filters: Dict = None) -> pd.DataFrame:
     """Get work orders with optional filters."""
     engine = get_engine()
@@ -751,7 +736,6 @@ def get_work_orders(filters: Dict = None) -> pd.DataFrame:
     
     with engine.connect() as conn:
         return pd.read_sql(query, conn, params=params)
-
 def get_work_order_by_id(wo_id: str) -> Dict:
     """Get single work order."""
     engine = get_engine()
@@ -761,7 +745,6 @@ def get_work_order_by_id(wo_id: str) -> Dict:
         if row:
             return dict(row._mapping)
     return {}
-
 def save_fracas_case(case_data: Dict) -> Tuple[bool, str]:
     """Save FRACAS case."""
     engine = get_engine()
@@ -789,7 +772,6 @@ def save_fracas_case(case_data: Dict) -> Tuple[bool, str]:
         return True, f"FRACAS Case saved: {case_data.get('case_id', 'created')}"
     except Exception as e:
         return False, f"Error saving: {str(e)}"
-
 def get_fracas_cases(filters: Dict = None) -> pd.DataFrame:
     """Get FRACAS cases."""
     engine = get_engine()
@@ -809,7 +791,6 @@ def get_fracas_cases(filters: Dict = None) -> pd.DataFrame:
     
     query += " ORDER BY open_dt DESC"
     return pd.read_sql(query, get_engine(), params=params)
-
 def get_fracas_case_by_id(case_id: str) -> Dict:
     """Get single FRACAS case."""
     engine = get_engine()
@@ -819,7 +800,6 @@ def get_fracas_case_by_id(case_id: str) -> Dict:
         if row:
             return dict(row._mapping)
     return {}
-
 def get_fracas_actions(case_id: str) -> pd.DataFrame:
     """Get actions for case."""
     return pd.read_sql(
@@ -827,7 +807,6 @@ def get_fracas_actions(case_id: str) -> pd.DataFrame:
         get_engine(),
         params={"case_id": case_id}
     )
-
 def save_fracas_action(action_data: Dict) -> bool:
     """Save FRACAS action."""
     engine = get_engine()
@@ -843,7 +822,6 @@ def save_fracas_action(action_data: Dict) -> bool:
         return True
     except:
         return False
-
 def delete_fracas_action(action_id: int) -> bool:
     """Delete FRACAS action."""
     engine = get_engine()
@@ -853,7 +831,6 @@ def delete_fracas_action(action_id: int) -> bool:
         return True
     except:
         return False
-
 def run_rules(rules_config: List[Dict]) -> pd.DataFrame:
     """Run all enabled rules and return hits."""
     engine = get_engine()
@@ -998,11 +975,9 @@ def run_rules(rules_config: List[Dict]) -> pd.DataFrame:
                 })
     
     return pd.DataFrame(hits) if hits else pd.DataFrame()
-
 # ============================================================================
 # PAGE: WORK ORDERS
 # ============================================================================
-
 def page_work_orders():
     """Work Orders management page."""
     st.header("📋 Work Orders")
@@ -1071,25 +1046,26 @@ def page_work_orders():
             
             with col1:
                 systems = [""] + list_systems()
-                system = st.selectbox("System", systems)
+                system = st.selectbox("System", systems, key="sys_select")
             
+            # *** KEY FIX: Call the functions directly without caching
             with col2:
                 subsystems = []
                 if system:
                     subsystems = [""] + list_subsystems(system)
-                subsystem = st.selectbox("Subsystem", subsystems)
+                subsystem = st.selectbox("Subsystem", subsystems, key="subsys_select")
             
             with col3:
                 components = []
                 if system and subsystem:
                     components = [""] + list_components(system, subsystem)
-                component = st.selectbox("Component", components)
+                component = st.selectbox("Component", components, key="comp_select")
             
             with col4:
                 failure_modes = []
                 if system and subsystem and component:
                     failure_modes = [""] + list_failure_modes(system, subsystem, component)
-                failure_mode = st.selectbox("Failure Mode", failure_modes)
+                failure_mode = st.selectbox("Failure Mode", failure_modes, key="fm_select")
             
             # Auto-fill codes
             recommended_action = ""
@@ -1257,11 +1233,9 @@ def page_work_orders():
                 st.dataframe(wos[["wo_id", "status", "created_dt", "system", "failure_mode", "total_cost", "downtime_hours"]], use_container_width=True)
             else:
                 st.info(f"No work orders for vehicle {vehicle_id}")
-
 # ============================================================================
 # PAGE: CATALOGUE
 # ============================================================================
-
 def page_catalogue():
     """FRACAS Catalogue page."""
     st.header("📚 FRACAS Codes Catalogue")
@@ -1325,11 +1299,9 @@ def page_catalogue():
                     )
         else:
             st.info("No catalogue entries loaded yet. Upload an Excel file to populate the catalogue.")
-
 # ============================================================================
 # PAGE: FRACAS CASES
 # ============================================================================
-
 def page_fracas_cases():
     """FRACAS Cases management page."""
     st.header("🔍 FRACAS Cases")
@@ -1522,11 +1494,9 @@ def page_fracas_cases():
                                 st.error("❌ Error updating case")
         else:
             st.info("No FRACAS cases found.")
-
 # ============================================================================
 # PAGE: RULES & DETECTION
 # ============================================================================
-
 def page_rules_detection():
     """Rules & Detection page."""
     st.header("⚙️ Rules & Detection")
@@ -1633,11 +1603,9 @@ def page_rules_detection():
             st.info("No rule hits detected.")
         
         st.session_state["run_rules_now"] = False
-
 # ============================================================================
 # PAGE: DASHBOARDS
 # ============================================================================
-
 def page_dashboards():
     """Dashboards page."""
     st.header("📊 Dashboards")
@@ -1799,11 +1767,9 @@ def page_dashboards():
                 color="Workshop"
             ).properties(width=400, height=300)
             st.altair_chart(chart_downtime, use_container_width=True)
-
 # ============================================================================
 # PAGE: DATA QUALITY
 # ============================================================================
-
 def page_data_quality():
     """Data Quality page."""
     st.header("🔍 Data Quality")
@@ -1887,11 +1853,9 @@ def page_data_quality():
                                 st.error(f"❌ {msg}")
     else:
         st.success("✅ All work orders have complete codes!")
-
 # ============================================================================
 # PAGE: ADMIN
 # ============================================================================
-
 def page_admin():
     """Admin page."""
     st.header("⚙️ Administration")
@@ -2108,11 +2072,9 @@ def page_admin():
                         st.cache_data.clear()
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
-
 # ============================================================================
 # PAGE: ABOUT
 # ============================================================================
-
 def page_about():
     """About page."""
     st.header("ℹ️ About AMIC FRACAS System")
@@ -2120,7 +2082,7 @@ def page_about():
     st.markdown("""
     ### AMIC Work Order Management & FRACAS System
     
-    **Prototype Version 1.0**
+    **Prototype Version 1.0 - FIXED**
     
     This application provides comprehensive management of work orders and failure reporting analysis using Corrective and Preventive Actions (FRACAS) methodology.
     
@@ -2155,21 +2117,24 @@ def page_about():
     - Configurable rules and thresholds
     - User and workshop master data
     
+    #### What Was Fixed
+    - **Cascading Dropdowns**: Removed problematic `@st.cache_data` decorators from `list_subsystems()`, `list_components()`, and `list_failure_modes()` functions
+    - **Form State Management**: Now properly refreshes available options when previous dropdown values change
+    - **Null Checks**: Added guard clauses to prevent empty lists when parameters are not set
+    
     #### Notes
     - This is a **prototype** with demo data
     - All data stored locally in SQLite (`amic_fracas.db`)
     - Designed for team demos and requirements validation
     - Support for bulk import of FRACAS catalogues via Excel
     
-    **Version**: 1.0 Prototype  
-    **Last Updated**: 2024  
+    **Version**: 1.0 Prototype (Fixed)
+    **Last Updated**: 2024
     **Prototype Data Notice**: Not production data
     """)
-
 # ============================================================================
 # MAIN APP
 # ============================================================================
-
 def main():
     """Main application entry point."""
     
@@ -2232,9 +2197,8 @@ def main():
     # Footer
     st.markdown("""
     <div class='footer-text'>
-    AMIC Work Order Management & FRACAS System - Prototype v1.0 | Not production data
+    AMIC Work Order Management & FRACAS System - Prototype v1.0 (Fixed) | Not production data
     </div>
     """, unsafe_allow_html=True)
-
 if __name__ == "__main__":
     main()
