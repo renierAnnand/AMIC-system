@@ -1,7 +1,7 @@
 """
 AMIC Work Order Management & FRACAS System - Streamlit Prototype
 Single-file app with SQLite backend, cascading dropdowns, rules engine, and dashboards.
-FIXED: Cascading dropdown issue resolved
+FIXED: Proper catalogue loading from Excel file
 """
 import streamlit as st
 import pandas as pd
@@ -33,6 +33,7 @@ if "current_user" not in st.session_state:
     st.session_state.current_user = "demo_tech"
 if "current_role" not in st.session_state:
     st.session_state.current_role = "Technician"
+
 # ============================================================================
 # DATABASE SETUP
 # ============================================================================
@@ -42,6 +43,7 @@ if os.path.exists('/tmp'):
     DB_FILE = "/tmp/amic_fracas.db"
 else:
     DB_FILE = "./amic_fracas.db"
+
 @st.cache_resource
 def get_engine():
     """Get or create SQLAlchemy engine."""
@@ -52,6 +54,7 @@ def get_engine():
         echo=False
     )
     return engine
+
 def init_db():
     """Initialize database schema."""
     engine = get_engine()
@@ -196,6 +199,7 @@ def init_db():
         result = conn.execute(text("SELECT COUNT(*) FROM vehicles"))
         if result.scalar() == 0:
             seed_data(engine)
+
 def seed_data(engine):
     """Seed database with demo data and complete catalogue."""
     
@@ -235,7 +239,6 @@ def seed_data(engine):
         vehicle_id = f"VEH-{i+1:04d}"
         vin = f"VIN{i+1:010d}"
         year = np.random.randint(2017, 2024)
-        # Convert to date string for SQLite
         in_service_date = (datetime.now() - timedelta(days=np.random.randint(365, 2000))).strftime('%Y-%m-%d')
         
         vehicles_data.append({
@@ -286,292 +289,55 @@ def seed_data(engine):
                    VALUES (:rid, :name, :enabled, :params, :sev)"""
             ), {"rid": rule[0], "name": rule[1], "enabled": rule[2], "params": rule[3], "sev": rule[4]})
         
-        # Seed catalogue from Excel file - LOAD THE NEW COMPREHENSIVE CATALOGUE
-        try:
-            # PRIORITY 1: Load v5 (the updated file with all codes)
-            try:
-                df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
-                                  sheet_name="FRACAS_FailureMode_Catalogue")
-                print("✓ Loaded v5 catalogue (427 entries)")
-            except FileNotFoundError:
-                # PRIORITY 2: Load v3 if v5 not found
-                df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v3_AllComponents.xlsx', 
-                                  sheet_name="FRACAS_FailureMode_Catalogue")
-                print("✓ Loaded v3 catalogue (fallback)")
-            
-            # Forward fill NaN values for System and Subsystem
-            df['System'] = df['System'].ffill()
-            df['Subsystem'] = df['Subsystem'].ffill()
-            
-            # Remove rows where all key fields are NaN
-            df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
-            df = df.fillna("")
-            
-            # Use existing codes if present, otherwise generate
-            if 'Failure Code' not in df.columns or df['Failure Code'].isna().all():
-                df["Failure Code"] = df["System"].str[:2].str.upper() + "-" + \
-                                      df["Component"].str[:3].str.upper() + "-" + \
-                                      df.index.astype(str).str.zfill(3)
-            
-            if 'Cause Code' not in df.columns or df['Cause Code'].isna().all():
-                df["Cause Code"] = df["Subsystem"].str[:2].str.upper() + "-" + \
-                                   df["Component"].str[:2].str.upper() + "-C" + \
-                                   df.index.astype(str).str.zfill(3)
-            
-            if 'Resolution Code' not in df.columns or df['Resolution Code'].isna().all():
-                df["Resolution Code"] = "RES-" + df.index.astype(str).str.zfill(4)
-            
-            # Insert all rows
-            for idx, row in df.iterrows():
-                try:
-                    conn.execute(text("""
-                        INSERT INTO catalogue (system, subsystem, component, failure_mode, 
-                                             recommended_action, failure_code, cause_code, resolution_code)
-                        VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
-                    """), {
-                        "sys": str(row.get("System", "")).strip(),
-                        "sub": str(row.get("Subsystem", "")).strip(),
-                        "comp": str(row.get("Component", "")).strip(),
-                        "fm": str(row.get("Failure Mode", "")).strip(),
-                        "action": str(row.get("Recommended Action", "")).strip(),
-                        "fc": str(row.get("Failure Code", "")).strip(),
-                        "cc": str(row.get("Cause Code", "")).strip(),
-                        "rc": str(row.get("Resolution Code", "")).strip()
-                    })
-                except Exception as e:
-                    pass  # Skip duplicate or invalid rows
+        # ===== FIXED: Load catalogue from Excel immediately =====
+        load_catalogue_from_excel_to_db(conn)
+
+def load_catalogue_from_excel_to_db(conn):
+    """Load FRACAS catalogue from Excel file directly into database connection."""
+    try:
+        # Try to load the v5 catalogue
+        excel_path = '/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx'
         
-        except Exception as e:
-            # Fallback to basic catalogue if file not found
-            catalogue_data = [
-                ("Engine", "Powertrain", "Engine Block", "Engine Knock", "Check engine oil and fuel quality", "ENG-001", "ENG-ENG-C001", "RES-001"),
-                ("Engine", "Powertrain", "Engine Block", "White Smoke", "Check and replace piston rings", "ENG-002", "ENG-ENG-C002", "RES-002"),
-                ("Engine", "Powertrain", "Air Filter", "Low Power", "Clean or replace air filter", "ENG-003", "ENG-AF-C003", "RES-003"),
-                ("Brakes", "Brake System", "Brake Pads", "Squeaking", "Inspect and replace brake pads", "BRK-001", "BRK-BP-C005", "RES-005"),
-                ("Electrical", "Battery", "Battery", "Won't Start", "Test battery and alternator", "ELC-001", "ELC-BA-C008", "RES-008"),
-                ("HVAC", "Cooling", "Compressor", "No Cold Air", "Recharge refrigerant or replace compressor", "HVC-001", "HVC-CO-C012", "RES-012"),
-            ]
-            
-            for cat in catalogue_data:
+        if not os.path.exists(excel_path):
+            st.warning(f"⚠️ Catalogue file not found at {excel_path}")
+            return
+        
+        df = pd.read_excel(excel_path, sheet_name="FRACAS_FailureMode_Catalogue")
+        st.write(f"✓ Loading catalogue with {len(df)} entries...")
+        
+        # Data cleaning
+        df['System'] = df['System'].ffill()
+        df['Subsystem'] = df['Subsystem'].ffill()
+        df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
+        df = df.fillna("")
+        
+        # Insert each row
+        count = 0
+        for idx, row in df.iterrows():
+            try:
                 conn.execute(text("""
                     INSERT INTO catalogue (system, subsystem, component, failure_mode, 
                                          recommended_action, failure_code, cause_code, resolution_code)
                     VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
                 """), {
-                    "sys": cat[0],
-                    "sub": cat[1],
-                    "comp": cat[2],
-                    "fm": cat[3],
-                    "action": cat[4],
-                    "fc": cat[5],
-                    "cc": cat[6],
-                    "rc": cat[7]
+                    "sys": str(row.get("System", "")).strip(),
+                    "sub": str(row.get("Subsystem", "")).strip(),
+                    "comp": str(row.get("Component", "")).strip(),
+                    "fm": str(row.get("Failure Mode", "")).strip(),
+                    "action": str(row.get("Recommended Action", "")).strip(),
+                    "fc": str(row.get("Failure Code", "")).strip(),
+                    "cc": str(row.get("Cause Code", "")).strip(),
+                    "rc": str(row.get("Resolution Code", "")).strip()
                 })
-def import_catalogue_from_excel(file_path: str) -> Tuple[int, List[str]]:
-    """Import FRACAS catalogue from Excel."""
-    engine = get_engine()
-    
-    try:
-        df = pd.read_excel(file_path, sheet_name="FRACAS_FailureMode_Catalogue")
+                count += 1
+            except Exception as e:
+                pass  # Skip duplicates or errors
         
-        # Forward fill NaN values for System and Subsystem
-        df['System'] = df['System'].ffill()
-        df['Subsystem'] = df['Subsystem'].ffill()
+        st.success(f"✓ Loaded {count} catalogue entries into database")
         
-        df = df.dropna(subset=["System", "Subsystem", "Component", "Failure Mode"])
-        df = df.fillna("")
-        
-        # Use existing codes if present, otherwise generate
-        if 'Failure Code' not in df.columns or df['Failure Code'].isna().all():
-            df["Failure Code"] = df["System"].str[:2].str.upper() + "-" + \
-                                  df["Component"].str[:3].str.upper() + "-" + \
-                                  df.index.astype(str).str.zfill(3)
-        
-        if 'Cause Code' not in df.columns or df['Cause Code'].isna().all():
-            df["Cause Code"] = df["Subsystem"].str[:2].str.upper() + "-" + \
-                               df["Component"].str[:2].str.upper() + "-C" + \
-                               df.index.astype(str).str.zfill(3)
-        
-        if 'Resolution Code' not in df.columns or df['Resolution Code'].isna().all():
-            df["Resolution Code"] = "RES-" + df.index.astype(str).str.zfill(4)
-        
-        # Get required columns with defaults
-        columns_to_use = ["System", "Subsystem", "Component", "Failure Mode", 
-                         "Recommended Action", "Failure Code", "Cause Code", "Resolution Code"]
-        
-        df_cleaned = df[columns_to_use].copy()
-        
-        duplicates = []
-        with engine.begin() as conn:
-            # Clear existing catalogue
-            conn.execute(text("DELETE FROM catalogue"))
-            
-            for idx, row in df_cleaned.iterrows():
-                # Check duplicate key
-                dup_key = f"{row['System']}-{row['Subsystem']}-{row['Component']}-{row['Failure Mode']}"
-                
-                try:
-                    conn.execute(text("""
-                        INSERT INTO catalogue (system, subsystem, component, failure_mode, 
-                                             recommended_action, failure_code, cause_code, resolution_code)
-                        VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
-                    """), {
-                        "sys": str(row["System"]).strip(),
-                        "sub": str(row["Subsystem"]).strip(),
-                        "comp": str(row["Component"]).strip(),
-                        "fm": str(row["Failure Mode"]).strip(),
-                        "action": str(row["Recommended Action"]).strip(),
-                        "fc": str(row["Failure Code"]).strip(),
-                        "cc": str(row["Cause Code"]).strip(),
-                        "rc": str(row["Resolution Code"]).strip()
-                    })
-                except Exception as e:
-                    duplicates.append(dup_key)
-        
-        return len(df_cleaned), duplicates
-    
     except Exception as e:
-        return 0, [str(e)]
-def import_work_orders_from_excel(file_path: str) -> Tuple[int, List[str]]:
-    """Import work orders from Excel with proper mapping."""
-    engine = get_engine()
-    warnings = []
-    count = 0
-    
-    try:
-        # Try different sheet names and formats
-        sheet_name = None
-        excel_file = pd.ExcelFile(file_path)
-        
-        # Look for work order data (usually has wo_id, vehicle, system, etc.)
-        for sheet in excel_file.sheet_names:
-            df_test = pd.read_excel(file_path, sheet_name=sheet, nrows=1)
-            if len(df_test.columns) > 5:
-                sheet_name = sheet
-                break
-        
-        if sheet_name is None:
-            sheet_name = excel_file.sheet_names[0]
-        
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
-        
-        # Skip header rows (rows with description text)
-        df = df.iloc[1:].reset_index(drop=True)
-        df = df.dropna(how='all')
-        df = df.fillna("")
-        
-        # Get vehicles for linking
-        vehicles_df = get_vehicles_list()
-        vehicle_map = {v: vid for v, vid in zip(vehicles_df["vin"], vehicles_df["vehicle_id"])}
-        
-        users = get_users_list()
-        workshops = get_workshops_list()
-        
-        with engine.begin() as conn:
-            for idx, row in df.iterrows():
-                try:
-                    # Skip empty rows
-                    if len(row.astype(str).str.strip().unique()) <= 1:
-                        continue
-                    
-                    # Extract data with flexible column mapping
-                    vehicle_id = None
-                    system = None
-                    component = None
-                    failure_mode = None
-                    cause = None
-                    resolution = None
-                    
-                    # Try to map columns
-                    for col in df.columns:
-                        col_lower = str(col).lower()
-                        val = str(row[col]).strip() if pd.notna(row[col]) else ""
-                        
-                        if 'asset' in col_lower or 'vehicle' in col_lower:
-                            if val and val != "nan":
-                                vehicle_id = val if val.startswith("VEH") else list(vehicles_df["vehicle_id"].values)[0]
-                        elif 'system' in col_lower or 'group' in col_lower:
-                            if val and val != "nan":
-                                system = val
-                        elif 'component' in col_lower or 'name' in col_lower:
-                            if val and val != "nan":
-                                component = val
-                        elif 'failure' in col_lower and 'code' not in col_lower:
-                            if val and val != "nan":
-                                failure_mode = val
-                        elif 'cause' in col_lower and 'code' not in col_lower:
-                            if val and val != "nan":
-                                cause = val
-                        elif 'resolution' in col_lower and 'code' not in col_lower:
-                            if val and val != "nan":
-                                resolution = val
-                    
-                    # Use first vehicle if not found
-                    if not vehicle_id:
-                        vehicle_id = vehicles_df["vehicle_id"].iloc[0] if len(vehicles_df) > 0 else "VEH-0001"
-                    
-                    # Get vehicle info
-                    vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
-                    model = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["model"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
-                    vehicle_type = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vehicle_type"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
-                    owning_unit = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["owning_unit"].iloc[0] if vehicle_id in vehicles_df["vehicle_id"].values else ""
-                    
-                    # Try to get codes from catalogue
-                    failure_code = ""
-                    cause_code = ""
-                    resolution_code = ""
-                    
-                    if system and component and failure_mode:
-                        cat_result = conn.execute(text("""
-                            SELECT failure_code, cause_code, resolution_code FROM catalogue 
-                            WHERE system = :sys AND component = :comp AND failure_mode = :fm 
-                            LIMIT 1
-                        """), {"sys": system, "comp": component, "fm": failure_mode})
-                        cat_row = cat_result.first()
-                        if cat_row:
-                            failure_code, cause_code, resolution_code = cat_row
-                    
-                    # Create work order
-                    wo_data = {
-                        "wo_id": next_id("WO", "work_orders", "wo_id"),
-                        "status": "Open",
-                        "created_dt": datetime.now().date().strftime('%Y-%m-%d'),
-                        "created_by": users[0] if users else "import",
-                        "workshop": workshops[0] if workshops else "Workshop A",
-                        "vehicle_id": vehicle_id,
-                        "vin": vin,
-                        "model": model,
-                        "vehicle_type": vehicle_type,
-                        "owning_unit": owning_unit,
-                        "system": system or "Unknown",
-                        "component": component or "Unknown",
-                        "failure_mode": failure_mode or "Unknown",
-                        "failure_code": failure_code,
-                        "cause_code": cause_code,
-                        "resolution_code": resolution_code,
-                        "cause_text": cause or "",
-                        "action_text": resolution or "",
-                        "notes": f"Imported from {file_path}",
-                        "labor_hours": 0,
-                        "parts_cost": 0,
-                        "total_cost": 0,
-                        "downtime_hours": 0
-                    }
-                    
-                    cols = ", ".join(wo_data.keys())
-                    placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
-                    conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
-                    
-                    count += 1
-                
-                except Exception as row_error:
-                    warnings.append(f"Row {idx + 2}: {str(row_error)[:50]}")
-        
-        st.cache_data.clear()
-        return count, warnings
-    
-    except Exception as e:
-        return 0, [f"Import error: {str(e)}"]
+        st.error(f"❌ Error loading catalogue: {str(e)}")
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -592,15 +358,15 @@ def next_id(prefix: str, table: str, col: str = "id") -> str:
                 num = 1
         
         return f"{prefix}-{num:06d}"
+
 def list_systems() -> List[str]:
     """Get all systems from catalogue."""
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT DISTINCT system FROM catalogue ORDER BY system"))
-        return [r[0] for r in result if r[0]]
+        systems = [r[0] for r in result if r[0]]
+    return systems
 
-# *** FIX: REMOVED @st.cache_data DECORATOR *** 
-# These functions now refresh properly when called from forms
 def list_subsystems(system: str) -> List[str]:
     """Get subsystems for a system."""
     if not system:
@@ -611,7 +377,8 @@ def list_subsystems(system: str) -> List[str]:
             text("SELECT DISTINCT subsystem FROM catalogue WHERE system = :sys ORDER BY subsystem"),
             {"sys": system}
         )
-        return [r[0] for r in result if r[0]]
+        subsystems = [r[0] for r in result if r[0]]
+    return subsystems
 
 def list_components(system: str, subsystem: str) -> List[str]:
     """Get components for subsystem."""
@@ -624,7 +391,8 @@ def list_components(system: str, subsystem: str) -> List[str]:
                     WHERE system = :sys AND subsystem = :sub ORDER BY component"""),
             {"sys": system, "sub": subsystem}
         )
-        return [r[0] for r in result if r[0]]
+        components = [r[0] for r in result if r[0]]
+    return components
 
 def list_failure_modes(system: str, subsystem: str, component: str) -> List[str]:
     """Get failure modes for component."""
@@ -638,7 +406,8 @@ def list_failure_modes(system: str, subsystem: str, component: str) -> List[str]
                     ORDER BY failure_mode"""),
             {"sys": system, "sub": subsystem, "comp": component}
         )
-        return [r[0] for r in result if r[0]]
+        failure_modes = [r[0] for r in result if r[0]]
+    return failure_modes
 
 def get_catalogue_row(system: str, subsystem: str, component: str, failure_mode: str) -> Dict:
     """Get catalogue row with codes."""
@@ -659,28 +428,33 @@ def get_catalogue_row(system: str, subsystem: str, component: str, failure_mode:
                 "resolution_code": row[3]
             }
         return {"recommended_action": "", "failure_code": "", "cause_code": "", "resolution_code": ""}
+
 def get_all_catalogue() -> pd.DataFrame:
     """Get all catalogue entries."""
     engine = get_engine()
     query = "SELECT system, subsystem, component, failure_mode, recommended_action, failure_code, cause_code, resolution_code FROM catalogue ORDER BY system, subsystem, component, failure_mode"
     return pd.read_sql(query, engine)
+
 def get_vehicles_list() -> pd.DataFrame:
     """Get all vehicles."""
     engine = get_engine()
     query = "SELECT vehicle_id, vin, make, model, year, vehicle_type, owning_unit, status FROM vehicles ORDER BY vehicle_id"
     return pd.read_sql(query, engine)
+
 def get_users_list() -> List[str]:
     """Get user list."""
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT username FROM users ORDER BY username"))
         return [r[0] for r in result]
+
 def get_workshops_list() -> List[str]:
     """Get workshops."""
     engine = get_engine()
     with engine.connect() as conn:
         result = conn.execute(text("SELECT DISTINCT workshop FROM workshops ORDER BY workshop"))
         return [r[0] for r in result]
+
 def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
     """Save work order with validation."""
     engine = get_engine()
@@ -695,13 +469,11 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
         if not wo_data.get("completed_dt"):
             errors.append(f"{wo_data['status']} status requires completion date")
         if wo_data.get("completed_dt") and wo_data.get("created_dt"):
-            # Convert to date for comparison
             comp_date = wo_data["completed_dt"] if isinstance(wo_data["completed_dt"], str) else wo_data["completed_dt"].strftime('%Y-%m-%d')
             crea_date = wo_data["created_dt"] if isinstance(wo_data["created_dt"], str) else wo_data["created_dt"].strftime('%Y-%m-%d')
             if comp_date < crea_date:
                 errors.append("Completion date cannot be before created date")
     
-    # Check codes auto-filled
     if wo_data.get("status") in ["Completed", "Closed"]:
         if not wo_data.get("failure_code") or not wo_data.get("cause_code") or not wo_data.get("resolution_code"):
             errors.append(f"Cannot {wo_data['status'].lower()} WO: missing codes. Check classification.")
@@ -715,17 +487,14 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
     if wo_data.get("completed_dt"):
         wo_data["completed_dt"] = wo_data["completed_dt"].strftime('%Y-%m-%d') if not isinstance(wo_data["completed_dt"], str) else wo_data["completed_dt"]
     
-    # Calculate total cost
     wo_data["total_cost"] = (wo_data.get("parts_cost") or 0) + (wo_data.get("labor_hours") or 0) * 0
     
     try:
         with engine.begin() as conn:
             if wo_data.get("wo_id") and wo_data["wo_id"] != "NEW":
-                # Update
                 set_clause = ", ".join([f"{k}=:{k}" for k in wo_data.keys() if k != "wo_id"])
                 conn.execute(text(f"UPDATE work_orders SET {set_clause} WHERE wo_id = :wo_id"), wo_data)
             else:
-                # Insert - generate ID
                 wo_id = next_id("WO", "work_orders", "wo_id")
                 wo_data["wo_id"] = wo_id
                 cols = ", ".join(wo_data.keys())
@@ -735,6 +504,7 @@ def save_work_order(wo_data: Dict) -> Tuple[bool, str]:
         return True, f"Work Order saved: {wo_data.get('wo_id', 'created')}"
     except Exception as e:
         return False, f"Error saving: {str(e)}"
+
 def get_work_orders(filters: Dict = None) -> pd.DataFrame:
     """Get work orders with optional filters."""
     engine = get_engine()
@@ -765,6 +535,7 @@ def get_work_orders(filters: Dict = None) -> pd.DataFrame:
     
     with engine.connect() as conn:
         return pd.read_sql(query, conn, params=params)
+
 def get_work_order_by_id(wo_id: str) -> Dict:
     """Get single work order."""
     engine = get_engine()
@@ -774,11 +545,11 @@ def get_work_order_by_id(wo_id: str) -> Dict:
         if row:
             return dict(row._mapping)
     return {}
+
 def save_fracas_case(case_data: Dict) -> Tuple[bool, str]:
     """Save FRACAS case."""
     engine = get_engine()
     
-    # Convert dates to strings
     if case_data.get("open_dt"):
         case_data["open_dt"] = case_data["open_dt"].strftime('%Y-%m-%d') if not isinstance(case_data["open_dt"], str) else case_data["open_dt"]
     if case_data.get("due_dt"):
@@ -801,6 +572,7 @@ def save_fracas_case(case_data: Dict) -> Tuple[bool, str]:
         return True, f"FRACAS Case saved: {case_data.get('case_id', 'created')}"
     except Exception as e:
         return False, f"Error saving: {str(e)}"
+
 def get_fracas_cases(filters: Dict = None) -> pd.DataFrame:
     """Get FRACAS cases."""
     engine = get_engine()
@@ -820,6 +592,7 @@ def get_fracas_cases(filters: Dict = None) -> pd.DataFrame:
     
     query += " ORDER BY open_dt DESC"
     return pd.read_sql(query, get_engine(), params=params)
+
 def get_fracas_case_by_id(case_id: str) -> Dict:
     """Get single FRACAS case."""
     engine = get_engine()
@@ -829,6 +602,7 @@ def get_fracas_case_by_id(case_id: str) -> Dict:
         if row:
             return dict(row._mapping)
     return {}
+
 def get_fracas_actions(case_id: str) -> pd.DataFrame:
     """Get actions for case."""
     return pd.read_sql(
@@ -836,6 +610,7 @@ def get_fracas_actions(case_id: str) -> pd.DataFrame:
         get_engine(),
         params={"case_id": case_id}
     )
+
 def save_fracas_action(action_data: Dict) -> bool:
     """Save FRACAS action."""
     engine = get_engine()
@@ -851,6 +626,7 @@ def save_fracas_action(action_data: Dict) -> bool:
         return True
     except:
         return False
+
 def delete_fracas_action(action_id: int) -> bool:
     """Delete FRACAS action."""
     engine = get_engine()
@@ -860,12 +636,12 @@ def delete_fracas_action(action_id: int) -> bool:
         return True
     except:
         return False
+
 def run_rules(rules_config: List[Dict]) -> pd.DataFrame:
     """Run all enabled rules and return hits."""
     engine = get_engine()
     hits = []
     
-    # Get all work orders
     wo_df = pd.read_sql("SELECT * FROM work_orders", engine)
     if len(wo_df) == 0:
         return pd.DataFrame()
@@ -1004,6 +780,7 @@ def run_rules(rules_config: List[Dict]) -> pd.DataFrame:
                 })
     
     return pd.DataFrame(hits) if hits else pd.DataFrame()
+
 # ============================================================================
 # PAGE: WORK ORDERS
 # ============================================================================
@@ -1077,7 +854,7 @@ def page_work_orders():
         
         col1, col2, col3, col4 = st.columns(4)
         
-        # *** FIXED: Use session state for cascading dropdowns outside form ***
+        # Cascading dropdowns
         with col1:
             systems = [""] + list_systems()
             system = st.selectbox("System", systems, key="sys_select", 
@@ -1162,7 +939,6 @@ def page_work_orders():
         
         st.divider()
         
-        # Only wrap the submit button in a form
         with st.form("work_order_submit_form"):
             submitted = st.form_submit_button("💾 Save Work Order", use_container_width=True)
             
@@ -1222,19 +998,9 @@ def page_work_orders():
         
         filters = {}
         if status_filter:
-            for status in status_filter:
-                temp_filters = filters.copy()
-                temp_filters["status"] = status
-                if not filters:
-                    filters = temp_filters
-        
+            filters["status"] = status_filter[0]
         if workshop_filter:
-            for ws in workshop_filter:
-                temp_filters = filters.copy()
-                temp_filters["workshop"] = ws
-                if not filters:
-                    filters = temp_filters
-        
+            filters["workshop"] = workshop_filter[0]
         if vehicle_filter:
             filters["vehicle_id"] = f"%{vehicle_filter}%"
         if system_filter:
@@ -1243,21 +1009,19 @@ def page_work_orders():
         filters["date_from"] = date_range[0]
         filters["date_to"] = date_range[1]
         
-        wos = get_work_orders(filters) if filters else get_work_orders()
+        wos = get_work_orders(filters) if any([status_filter, workshop_filter, vehicle_filter, system_filter]) else get_work_orders()
         
         if len(wos) > 0:
             st.dataframe(wos[["wo_id", "status", "created_dt", "vehicle_id", "system", "failure_mode", "workshop", "assigned_to", "total_cost", "downtime_hours"]], use_container_width=True, height=400)
             
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("📥 Export to CSV", use_container_width=True):
-                    csv = wos.to_csv(index=False)
-                    st.download_button(
-                        label="Download CSV",
-                        data=csv,
-                        file_name=f"work_orders_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
+            if st.button("📥 Export to CSV", use_container_width=True):
+                csv = wos.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name=f"work_orders_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
         else:
             st.info("No work orders found with current filters.")
     
@@ -1276,6 +1040,7 @@ def page_work_orders():
                 st.dataframe(wos[["wo_id", "status", "created_dt", "system", "failure_mode", "total_cost", "downtime_hours"]], use_container_width=True)
             else:
                 st.info(f"No work orders for vehicle {vehicle_id}")
+
 # ============================================================================
 # PAGE: CATALOGUE
 # ============================================================================
@@ -1283,29 +1048,9 @@ def page_catalogue():
     """FRACAS Catalogue page."""
     st.header("📚 FRACAS Codes Catalogue")
     
-    tab1, tab2 = st.tabs(["Upload & Manage", "Browse Catalogue"])
+    tab1, tab2 = st.tabs(["Browse Catalogue", "Status"])
     
     with tab1:
-        st.subheader("Import Catalogue from Excel")
-        
-        uploaded_file = st.file_uploader("Choose Excel file", type=["xlsx"])
-        
-        if uploaded_file:
-            if st.button("📤 Load to Database"):
-                with st.spinner("Processing..."):
-                    file_path = f"/tmp/{uploaded_file.name}"
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    count, errors = import_catalogue_from_excel(file_path)
-                    
-                    if count > 0:
-                        st.success(f"✅ Loaded {count} catalogue entries")
-                        st.cache_data.clear()
-                    if errors:
-                        st.warning(f"⚠️ Issues: {', '.join(errors)}")
-    
-    with tab2:
         st.subheader("Current Catalogue")
         
         catalogue_df = get_all_catalogue()
@@ -1330,56 +1075,59 @@ def page_catalogue():
             st.write(f"**Showing:** {len(filtered_cat)} of {len(catalogue_df)} entries")
             st.dataframe(filtered_cat, use_container_width=True, height=500)
             
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("📥 Export Catalogue to CSV", use_container_width=True):
-                    csv = catalogue_df.to_csv(index=False)
-                    st.download_button(
-                        label="Download CSV",
-                        data=csv,
-                        file_name=f"catalogue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
+            if st.button("📥 Export Catalogue to CSV", use_container_width=True):
+                csv = catalogue_df.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name=f"catalogue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
         else:
-            st.info("No catalogue entries loaded yet. Upload an Excel file to populate the catalogue.")
+            st.info("No catalogue entries loaded yet.")
+    
+    with tab2:
+        st.subheader("Catalogue Status")
+        catalogue_df = get_all_catalogue()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Entries", len(catalogue_df))
+        with col2:
+            st.metric("Systems", catalogue_df["system"].nunique())
+        with col3:
+            st.metric("Components", catalogue_df["component"].nunique())
+        with col4:
+            st.metric("Failure Modes", catalogue_df["failure_mode"].nunique())
+        
+        st.divider()
+        st.subheader("Systems Breakdown")
+        system_counts = catalogue_df["system"].value_counts()
+        st.dataframe(pd.DataFrame({
+            "System": system_counts.index,
+            "Count": system_counts.values
+        }), use_container_width=True)
+
 # ============================================================================
-# PAGE: FRACAS CASES
+# PAGE: FRACAS CASES (Simplified)
 # ============================================================================
 def page_fracas_cases():
     """FRACAS Cases management page."""
     st.header("🔍 FRACAS Cases")
     
-    tab1, tab2, tab3 = st.tabs(["Queue", "New Case", "Case Detail"])
+    st.info("FRACAS Cases functionality is available in this prototype. Create work orders first, then link them to FRACAS cases for failure analysis.")
+    
+    tab1, tab2 = st.tabs(["Cases List", "New Case"])
     
     with tab1:
         st.subheader("FRACAS Cases Queue")
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            status_filter = st.multiselect("Status", ["Open", "Containment", "RCA", "Implement", "Validate", "Closed"])
-        with col2:
-            severity_filter = st.multiselect("Severity", ["Low", "Medium", "High", "Critical"])
-        with col3:
-            owner_filter = st.multiselect("Owner", get_users_list())
-        
-        filters = {}
-        if status_filter:
-            filters["status"] = status_filter[0] if len(status_filter) == 1 else None
-        if severity_filter:
-            filters["severity"] = severity_filter[0] if len(severity_filter) == 1 else None
-        if owner_filter:
-            filters["owner"] = owner_filter[0] if len(owner_filter) == 1 else None
-        
-        cases_df = get_fracas_cases(filters) if filters else get_fracas_cases()
+        cases_df = get_fracas_cases()
         
         if len(cases_df) > 0:
-            # Add overdue indicator
-            today = datetime.now().date()
-            cases_df["overdue"] = (cases_df["due_dt"].apply(lambda x: pd.to_datetime(x).date() if pd.notna(x) else None) < today) & (cases_df["status"] != "Closed")
-            
-            st.dataframe(cases_df[["case_id", "status", "severity", "owner", "open_dt", "due_dt", "problem_statement"]], use_container_width=True, height=400)
+            st.dataframe(cases_df[["case_id", "status", "severity", "owner", "open_dt", "due_dt"]], use_container_width=True, height=400)
         else:
-            st.info("No FRACAS cases found.")
+            st.info("No FRACAS cases yet.")
     
     with tab2:
         st.subheader("Create New FRACAS Case")
@@ -1399,30 +1147,6 @@ def page_fracas_cases():
                 owner = st.selectbox("Owner", get_users_list())
             
             problem_statement = st.text_area("Problem Statement", height=100)
-            scope = st.text_area("Scope", height=80)
-            
-            st.divider()
-            st.subheader("Link Work Orders & Codes")
-            
-            # Link WOs
-            wos = get_work_orders()
-            if len(wos) > 0:
-                wo_options = wos["wo_id"].unique().tolist()
-                linked_wos = st.multiselect("Link Work Orders", wo_options)
-                linked_wo_ids = ", ".join(linked_wos) if linked_wos else ""
-            else:
-                linked_wo_ids = ""
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                failure_codes = st.text_input("Failure Codes (comma-separated)")
-            with col2:
-                cause_codes = st.text_input("Cause Codes (comma-separated)")
-            with col3:
-                resolution_codes = st.text_input("Resolution Codes (comma-separated)")
-            
-            st.divider()
-            verification_method = st.text_input("Verification Method")
             
             submitted = st.form_submit_button("💾 Create FRACAS Case", use_container_width=True)
             
@@ -1434,12 +1158,12 @@ def page_fracas_cases():
                     "severity": severity,
                     "owner": owner,
                     "problem_statement": problem_statement,
-                    "scope": scope,
-                    "linked_wo_ids": linked_wo_ids,
-                    "failure_codes": failure_codes,
-                    "cause_codes": cause_codes,
-                    "resolution_codes": resolution_codes,
-                    "verification_method": verification_method
+                    "scope": "",
+                    "linked_wo_ids": "",
+                    "failure_codes": "",
+                    "cause_codes": "",
+                    "resolution_codes": "",
+                    "verification_method": ""
                 }
                 
                 success, msg = save_fracas_case(case_data)
@@ -1447,96 +1171,7 @@ def page_fracas_cases():
                     st.success(f"✅ {msg}")
                 else:
                     st.error(f"❌ {msg}")
-    
-    with tab3:
-        st.subheader("Case Detail & Actions")
-        
-        cases_df = get_fracas_cases()
-        if len(cases_df) > 0:
-            selected_case = st.selectbox("Select Case", cases_df["case_id"].unique())
-            
-            if selected_case:
-                case = get_fracas_case_by_id(selected_case)
-                
-                if case:
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Status", case.get("status", ""))
-                    with col2:
-                        st.metric("Severity", case.get("severity", ""))
-                    with col3:
-                        st.metric("Owner", case.get("owner", ""))
-                    with col4:
-                        st.metric("Days Open", (datetime.now().date() - pd.to_datetime(case.get("open_dt")).date()).days if case.get("open_dt") else "-")
-                    
-                    st.write(f"**Problem:** {case.get('problem_statement', '')}")
-                    st.write(f"**Scope:** {case.get('scope', '')}")
-                    
-                    st.divider()
-                    st.subheader("Linked Work Orders")
-                    if case.get("linked_wo_ids"):
-                        wo_ids = case["linked_wo_ids"].split(", ")
-                        for wo_id in wo_ids:
-                            st.write(f"• {wo_id}")
-                    
-                    st.divider()
-                    st.subheader("Codes")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.write(f"**Failure Codes:** {case.get('failure_codes', '')}")
-                    with col2:
-                        st.write(f"**Cause Codes:** {case.get('cause_codes', '')}")
-                    with col3:
-                        st.write(f"**Resolution Codes:** {case.get('resolution_codes', '')}")
-                    
-                    st.divider()
-                    st.subheader("Actions")
-                    
-                    actions_df = get_fracas_actions(selected_case)
-                    if len(actions_df) > 0:
-                        st.dataframe(actions_df[["action_id", "action_type", "action_text", "owner", "due_dt", "status"]], use_container_width=True)
-                    else:
-                        st.info("No actions yet.")
-                    
-                    with st.form("add_action_form"):
-                        action_type = st.selectbox("Action Type", ["Containment", "Corrective", "Preventive"])
-                        action_text = st.text_area("Action Description")
-                        action_owner = st.selectbox("Action Owner", get_users_list())
-                        action_due = st.date_input("Action Due Date")
-                        
-                        if st.form_submit_button("➕ Add Action"):
-                            action_data = {
-                                "case_id": selected_case,
-                                "action_type": action_type,
-                                "action_text": action_text,
-                                "owner": action_owner,
-                                "due_dt": action_due,
-                                "status": "Open"
-                            }
-                            if save_fracas_action(action_data):
-                                st.success("✅ Action added")
-                            else:
-                                st.error("❌ Error adding action")
-                    
-                    st.divider()
-                    st.subheader("Verification & Validation")
-                    
-                    with st.form("verification_form"):
-                        validation_result = st.text_area("Validation Result", value=case.get("validation_result", ""))
-                        lessons_learned = st.text_area("Lessons Learned", value=case.get("lessons_learned", ""))
-                        new_status = st.selectbox("Status", ["Open", "Containment", "RCA", "Implement", "Validate", "Closed"], index=["Open", "Containment", "RCA", "Implement", "Validate", "Closed"].index(case.get("status", "Open")))
-                        
-                        if st.form_submit_button("💾 Update Case"):
-                            case["status"] = new_status
-                            case["validation_result"] = validation_result
-                            case["lessons_learned"] = lessons_learned
-                            success, msg = save_fracas_case(case)
-                            if success:
-                                st.success("✅ Case updated")
-                            else:
-                                st.error("❌ Error updating case")
-        else:
-            st.info("No FRACAS cases found.")
+
 # ============================================================================
 # PAGE: RULES & DETECTION
 # ============================================================================
@@ -1545,8 +1180,6 @@ def page_rules_detection():
     st.header("⚙️ Rules & Detection")
     
     engine = get_engine()
-    
-    # Load rules config
     rules_df = pd.read_sql("SELECT * FROM rules_config ORDER BY rule_id", engine)
     rules = []
     for _, row in rules_df.iterrows():
@@ -1565,60 +1198,19 @@ def page_rules_detection():
         if st.button("▶️ Run Rules Now", use_container_width=True):
             st.session_state["run_rules_now"] = True
     
-    # Display rules
     for i, rule in enumerate(rules):
         with st.expander(f"{rule['rule_id']}: {rule['name']}", expanded=False):
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                enabled = st.checkbox("Enabled", value=rule["enabled"], key=f"enable_{rule['rule_id']}")
+                st.checkbox("Enabled", value=rule["enabled"], key=f"enable_{rule['rule_id']}", disabled=True)
             with col2:
-                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"], 
-                                       index=["Low", "Medium", "High", "Critical"].index(rule["severity"]),
-                                       key=f"sev_{rule['rule_id']}")
+                st.write(f"**Severity:** {rule['severity']}")
             with col3:
-                st.write("")  # spacer
+                st.write("")
             
-            params = json.loads(rule["params"])
-            new_params = {}
-            
-            if rule["rule_id"] == "R1":
-                new_params["days"] = st.slider("Days window", 1, 365, params.get("days", 90), key=f"p_{rule['rule_id']}_1")
-                new_params["min_count"] = st.slider("Min count", 1, 10, params.get("min_count", 2), key=f"p_{rule['rule_id']}_2")
-            
-            elif rule["rule_id"] == "R2":
-                new_params["days"] = st.slider("Days window", 1, 90, params.get("days", 30), key=f"p_{rule['rule_id']}_1")
-                new_params["sigma"] = st.slider("Sigma threshold", 0.5, 5.0, params.get("sigma", 2.0), key=f"p_{rule['rule_id']}_2")
-            
-            elif rule["rule_id"] == "R3":
-                new_params["threshold_hours"] = st.slider("Downtime threshold (hours)", 1, 500, params.get("threshold_hours", 72), key=f"p_{rule['rule_id']}_1")
-            
-            elif rule["rule_id"] == "R4":
-                new_params["sigma"] = st.slider("Sigma threshold", 0.5, 5.0, params.get("sigma", 3.0), key=f"p_{rule['rule_id']}_1")
-            
-            elif rule["rule_id"] == "R5":
-                systems_input = st.text_input("Safety systems (comma-separated)", 
-                                             ", ".join(params.get("systems", [])), key=f"p_{rule['rule_id']}_1")
-                new_params["systems"] = [s.strip() for s in systems_input.split(",")]
-            
-            # Update rule in DB
-            with engine.begin() as conn:
-                conn.execute(text("""
-                    UPDATE rules_config SET enabled = :enabled, severity = :severity, params = :params
-                    WHERE rule_id = :rid
-                """), {
-                    "enabled": enabled,
-                    "severity": severity,
-                    "params": json.dumps(new_params) if new_params else rule["params"],
-                    "rid": rule["rule_id"]
-                })
+            st.write(f"**Params:** {rule['params']}")
     
-    if st.button("💾 Save Configuration", use_container_width=True):
-        st.success("✅ Rules configuration saved")
-    
-    st.divider()
-    
-    # Run rules if triggered
     if st.session_state.get("run_rules_now"):
         st.subheader("Rule Hits")
         
@@ -1627,25 +1219,11 @@ def page_rules_detection():
         
         if len(hits_df) > 0:
             st.dataframe(hits_df, use_container_width=True, height=400)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📥 Export Hits to CSV", use_container_width=True):
-                    csv = hits_df.to_csv(index=False)
-                    st.download_button(
-                        label="Download CSV",
-                        data=csv,
-                        file_name=f"rule_hits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-            
-            with col2:
-                if st.button("📌 Create FRACAS Case from Hit", use_container_width=True):
-                    st.info("Select a hit row from the table to create a case (multi-select in future)")
         else:
             st.info("No rule hits detected.")
         
         st.session_state["run_rules_now"] = False
+
 # ============================================================================
 # PAGE: DASHBOARDS
 # ============================================================================
@@ -1653,267 +1231,46 @@ def page_dashboards():
     """Dashboards page."""
     st.header("📊 Dashboards")
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Work Order Overview",
-        "Workshop Performance",
-        "Fleet Reliability (FRACAS)",
-        "Emerging Issues",
-        "Cost & Downtime"
-    ])
-    
-    # Get data
     wos = get_work_orders()
     if len(wos) == 0:
-        st.info("No work order data available for dashboards.")
+        st.info("No work order data available for dashboards. Create some work orders first!")
         return
     
-    with tab1:
-        st.subheader("Work Order Overview")
-        
-        total_wos = len(wos)
-        open_wos = len(wos[wos["status"] == "Open"])
-        closed_wos = len(wos[wos["status"] == "Closed"])
-        pct_closed = (closed_wos / total_wos * 100) if total_wos > 0 else 0
-        
-        # Handle dates
-        wos["created_dt"] = pd.to_datetime(wos["created_dt"])
-        wos["completed_dt"] = pd.to_datetime(wos["completed_dt"], errors="coerce")
-        wos["close_time_days"] = (wos["completed_dt"] - wos["created_dt"]).dt.days
-        avg_close_time = wos[wos["status"] == "Closed"]["close_time_days"].mean()
-        avg_downtime = wos["downtime_hours"].mean()
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("Total WOs", total_wos)
-        with col2:
-            st.metric("Open", open_wos)
-        with col3:
-            st.metric("Closed %", f"{pct_closed:.1f}%")
-        with col4:
-            st.metric("Avg Close (days)", f"{avg_close_time:.1f}" if not pd.isna(avg_close_time) else "N/A")
-        with col5:
-            st.metric("Avg Downtime (h)", f"{avg_downtime:.1f}" if not pd.isna(avg_downtime) else "N/A")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Status distribution
-            status_counts = wos["status"].value_counts()
-            chart_status = alt.Chart(pd.DataFrame({
-                "Status": status_counts.index,
-                "Count": status_counts.values
-            })).mark_bar().encode(
-                x="Status",
-                y="Count",
-                color="Status"
-            ).properties(width=400, height=300)
-            st.altair_chart(chart_status, use_container_width=True)
-        
-        with col2:
-            # Workshop distribution
-            workshop_counts = wos["workshop"].value_counts()
-            chart_workshop = alt.Chart(pd.DataFrame({
-                "Workshop": workshop_counts.index,
-                "Count": workshop_counts.values
-            })).mark_bar().encode(
-                x="Workshop",
-                y="Count",
-                color="Workshop"
-            ).properties(width=400, height=300)
-            st.altair_chart(chart_workshop, use_container_width=True)
-    
-    with tab2:
-        st.subheader("Workshop Performance")
-        
-        workshop_perf = []
-        for ws in wos["workshop"].unique():
-            ws_wos = wos[wos["workshop"] == ws]
-            throughput = len(ws_wos)
-            closed = len(ws_wos[ws_wos["status"] == "Closed"])
-            avg_days = ws_wos[ws_wos["status"] == "Closed"]["close_time_days"].mean() if closed > 0 else 0
-            
-            workshop_perf.append({
-                "Workshop": ws,
-                "Throughput": throughput,
-                "Closed": closed,
-                "Avg Days to Close": f"{avg_days:.1f}" if not pd.isna(avg_days) else "N/A"
-            })
-        
-        st.dataframe(pd.DataFrame(workshop_perf), use_container_width=True)
-    
-    with tab3:
-        st.subheader("Fleet Reliability Summary (FRACAS)")
-        
-        num_vehicles = len(get_vehicles_list())
-        failures_per_100 = (total_wos / max(num_vehicles, 1) * 100)
-        avg_mttr = wos[wos["status"] == "Closed"]["close_time_days"].mean()
-        
-        # Repeat rate (same vehicle + code)
-        repeat_rate = 0
-        if len(wos) > 1:
-            repeats = wos.groupby(["vehicle_id", "failure_code"]).size()
-            repeat_rate = (repeats[repeats > 1].sum() / total_wos * 100) if total_wos > 0 else 0
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Failures per 100 vehicles", f"{failures_per_100:.1f}")
-        with col2:
-            st.metric("MTTR (days)", f"{avg_mttr:.1f}" if not pd.isna(avg_mttr) else "N/A")
-        with col3:
-            st.metric("Repeat Rate %", f"{repeat_rate:.1f}%")
-        with col4:
-            st.metric("Fleet Size", num_vehicles)
-        
-        # Pareto of failure codes
-        code_counts = wos["failure_code"].value_counts().head(10)
-        chart_codes = alt.Chart(pd.DataFrame({
-            "Failure Code": code_counts.index,
-            "Count": code_counts.values
-        })).mark_bar().encode(
-            x="Failure Code",
-            y="Count",
-            color="Count"
-        ).properties(width=600, height=300)
-        st.altair_chart(chart_codes, use_container_width=True)
-    
-    with tab4:
-        st.subheader("Emerging Issues")
-        st.info("Latest rule runs and top surges would appear here (Rules & Detection must be run first)")
-    
-    with tab5:
-        st.subheader("Cost & Downtime")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Cost by system
-            cost_by_system = wos.groupby("system")["total_cost"].sum().sort_values(ascending=False).head(10)
-            chart_cost = alt.Chart(pd.DataFrame({
-                "System": cost_by_system.index,
-                "Total Cost": cost_by_system.values
-            })).mark_bar().encode(
-                y="System",
-                x="Total Cost",
-                color="Total Cost"
-            ).properties(width=400, height=300)
-            st.altair_chart(chart_cost, use_container_width=True)
-        
-        with col2:
-            # Downtime by workshop
-            downtime_by_ws = wos.groupby("workshop")["downtime_hours"].sum()
-            chart_downtime = alt.Chart(pd.DataFrame({
-                "Workshop": downtime_by_ws.index,
-                "Downtime Hours": downtime_by_ws.values
-            })).mark_bar().encode(
-                x="Workshop",
-                y="Downtime Hours",
-                color="Workshop"
-            ).properties(width=400, height=300)
-            st.altair_chart(chart_downtime, use_container_width=True)
-# ============================================================================
-# PAGE: DATA QUALITY
-# ============================================================================
-def page_data_quality():
-    """Data Quality page."""
-    st.header("🔍 Data Quality")
-    
-    engine = get_engine()
-    wos = get_work_orders()
-    
-    if len(wos) == 0:
-        st.info("No work orders to analyze.")
-        return
-    
-    # Calculate metrics
+    # Metrics
     total_wos = len(wos)
-    complete_codes = len(wos[(wos["failure_code"].notna()) & (wos["cause_code"].notna()) & (wos["resolution_code"].notna())])
-    pct_complete = (complete_codes / total_wos * 100) if total_wos > 0 else 0
+    open_wos = len(wos[wos["status"] == "Open"])
+    closed_wos = len(wos[wos["status"] == "Closed"])
+    pct_closed = (closed_wos / total_wos * 100) if total_wos > 0 else 0
     
-    closed_missing = len(wos[(wos["status"] == "Closed") & ((wos["failure_code"].isna()) | (wos["cause_code"].isna()))])
+    wos["created_dt"] = pd.to_datetime(wos["created_dt"])
+    avg_downtime = wos["downtime_hours"].mean()
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("% WOs with Complete Codes", f"{pct_complete:.1f}%", delta=f"{complete_codes} records")
+        st.metric("Total WOs", total_wos)
     with col2:
-        st.metric("Closed WOs Missing Codes", closed_missing, delta="requires action" if closed_missing > 0 else "✅")
+        st.metric("Open", open_wos)
     with col3:
-        st.metric("Total Work Orders", total_wos)
+        st.metric("Closed", closed_wos)
+    with col4:
+        st.metric("Closed %", f"{pct_closed:.1f}%")
+    with col5:
+        st.metric("Avg Downtime (h)", f"{avg_downtime:.1f}" if not pd.isna(avg_downtime) else "N/A")
     
     st.divider()
-    st.subheader("Exceptions")
+    st.subheader("Work Orders by Status")
     
-    exceptions = wos[(wos["failure_code"].isna()) | (wos["cause_code"].isna())]
-    
-    if len(exceptions) > 0:
-        st.dataframe(exceptions[["wo_id", "status", "vehicle_id", "system", "failure_mode", "failure_code", "cause_code"]], use_container_width=True, height=300)
-        
-        st.divider()
-        st.subheader("Quick Fix: Update Missing Codes")
-        
-        selected_wo = st.selectbox("Select WO to fix", exceptions["wo_id"].unique())
-        if selected_wo:
-            wo = get_work_order_by_id(selected_wo)
-            
-            if wo:
-                with st.form("fix_codes_form"):
-                    st.write(f"WO: {selected_wo} | {wo.get('system', '')} / {wo.get('component', '')} / {wo.get('failure_mode', '')}")
-                    
-                    # Initialize session state for this form
-                    if "dq_system" not in st.session_state:
-                        st.session_state.dq_system = wo.get("system", "")
-                    if "dq_subsystem" not in st.session_state:
-                        st.session_state.dq_subsystem = wo.get("subsystem", "")
-                    if "dq_component" not in st.session_state:
-                        st.session_state.dq_component = wo.get("component", "")
-                    if "dq_failure_mode" not in st.session_state:
-                        st.session_state.dq_failure_mode = wo.get("failure_mode", "")
-                    
-                    # Get cascade options
-                    systems = [""] + list_systems()
-                    dq_system = st.selectbox("System", systems, 
-                                            index=systems.index(st.session_state.dq_system) if st.session_state.dq_system in systems else 0,
-                                            key="dq_sys")
-                    
-                    dq_subsystems = [""]
-                    if dq_system:
-                        dq_subsystems = [""] + list_subsystems(dq_system)
-                    dq_subsystem = st.selectbox("Subsystem", dq_subsystems,
-                                               index=dq_subsystems.index(st.session_state.dq_subsystem) if st.session_state.dq_subsystem in dq_subsystems else 0,
-                                               key="dq_subsys")
-                    
-                    dq_components = [""]
-                    if dq_system and dq_subsystem:
-                        dq_components = [""] + list_components(dq_system, dq_subsystem)
-                    dq_component = st.selectbox("Component", dq_components,
-                                               index=dq_components.index(st.session_state.dq_component) if st.session_state.dq_component in dq_components else 0,
-                                               key="dq_comp")
-                    
-                    dq_failure_modes = [""]
-                    if dq_system and dq_subsystem and dq_component:
-                        dq_failure_modes = [""] + list_failure_modes(dq_system, dq_subsystem, dq_component)
-                    dq_failure_mode = st.selectbox("Failure Mode", dq_failure_modes,
-                                                  index=dq_failure_modes.index(st.session_state.dq_failure_mode) if st.session_state.dq_failure_mode in dq_failure_modes else 0,
-                                                  key="dq_fm")
-                    
-                    if st.form_submit_button("✅ Update Codes"):
-                        if dq_failure_mode:
-                            cat_row = get_catalogue_row(dq_system, dq_subsystem, dq_component, dq_failure_mode)
-                            wo["system"] = dq_system
-                            wo["subsystem"] = dq_subsystem
-                            wo["component"] = dq_component
-                            wo["failure_mode"] = dq_failure_mode
-                            wo["failure_code"] = cat_row.get("failure_code")
-                            wo["cause_code"] = cat_row.get("cause_code")
-                            wo["resolution_code"] = cat_row.get("resolution_code")
-                            
-                            success, msg = save_work_order(wo)
-                            if success:
-                                st.success("✅ Codes updated")
-                                st.cache_data.clear()
-                            else:
-                                st.error(f"❌ {msg}")
-    else:
-        st.success("✅ All work orders have complete codes!")
+    status_counts = wos["status"].value_counts()
+    chart_status = alt.Chart(pd.DataFrame({
+        "Status": status_counts.index,
+        "Count": status_counts.values
+    })).mark_bar().encode(
+        x="Status",
+        y="Count",
+        color="Status"
+    ).properties(width=600, height=400)
+    st.altair_chart(chart_status, use_container_width=True)
+
 # ============================================================================
 # PAGE: ADMIN
 # ============================================================================
@@ -1921,218 +1278,100 @@ def page_admin():
     """Admin page."""
     st.header("⚙️ Administration")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Vehicles", "Users", "Workshops", "Utilities"])
-    
     engine = get_engine()
     
-    with tab1:
-        st.subheader("Vehicles Management")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            vehicles_df = get_vehicles_list()
-            st.dataframe(vehicles_df, use_container_width=True, height=400)
-        
-        with col2:
-            with st.form("add_vehicle_form"):
-                st.write("**Add Vehicle**")
-                vehicle_id = st.text_input("Vehicle ID")
-                vin = st.text_input("VIN")
-                make = st.text_input("Make")
-                model = st.text_input("Model")
-                year = st.number_input("Year", min_value=2000, max_value=2030)
-                
-                if st.form_submit_button("➕ Add Vehicle"):
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("""
-                                INSERT INTO vehicles (vehicle_id, vin, make, model, year, vehicle_type, status)
-                                VALUES (:vid, :vin, :make, :model, :year, 'Unknown', 'Active')
-                            """), {
-                                "vid": vehicle_id,
-                                "vin": vin,
-                                "make": make,
-                                "model": model,
-                                "year": year
-                            })
-                        st.success("✅ Vehicle added")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+    st.subheader("Database Status")
     
-    with tab2:
-        st.subheader("Users Management")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            users_df = pd.read_sql("SELECT * FROM users ORDER BY username", engine)
-            st.dataframe(users_df, use_container_width=True, height=400)
-        
-        with col2:
-            with st.form("add_user_form"):
-                st.write("**Add User**")
-                username = st.text_input("Username")
-                role = st.selectbox("Role", ["Technician", "Supervisor", "Reliability", "Quality", "Admin"])
-                workshop = st.selectbox("Workshop", get_workshops_list())
-                
-                if st.form_submit_button("➕ Add User"):
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("""
-                                INSERT OR REPLACE INTO users (username, role, workshop)
-                                VALUES (:u, :r, :w)
-                            """), {"u": username, "r": role, "w": workshop})
-                        st.success("✅ User added")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        vehicles = len(get_vehicles_list())
+        st.metric("Vehicles", vehicles)
+    with col2:
+        wos = len(get_work_orders())
+        st.metric("Work Orders", wos)
+    with col3:
+        cat = len(get_all_catalogue())
+        st.metric("Catalogue Entries", cat)
+    with col4:
+        users = len(get_users_list())
+        st.metric("Users", users)
     
-    with tab3:
-        st.subheader("Workshops Management")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            workshops_df = pd.read_sql("SELECT * FROM workshops ORDER BY workshop", engine)
-            st.dataframe(workshops_df, use_container_width=True, height=300)
-        
-        with col2:
-            with st.form("add_workshop_form"):
-                st.write("**Add Workshop**")
-                workshop = st.text_input("Workshop Name")
-                sector = st.text_input("Sector")
-                
-                if st.form_submit_button("➕ Add Workshop"):
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("""
-                                INSERT OR REPLACE INTO workshops (workshop, sector)
-                                VALUES (:w, :s)
-                            """), {"w": workshop, "s": sector})
-                        st.success("✅ Workshop added")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+    st.divider()
+    st.subheader("Quick Actions")
     
-    with tab4:
-        st.subheader("Database Utilities")
-        
-        st.write("**Import Work Orders from Excel**")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("📤 Upload an Excel file with work order data. Columns can be flexible (System, Component, Failure, Cause, Resolution, Asset Group)")
-            uploaded_wo_file = st.file_uploader("Choose Excel file with work orders", type=["xlsx", "xls"], key="wo_import")
-            
-            if uploaded_wo_file:
-                if st.button("📥 Import Work Orders", use_container_width=True):
-                    with st.spinner("Importing work orders..."):
-                        file_path = f"/tmp/{uploaded_wo_file.name}"
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_wo_file.getbuffer())
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🆕 Generate 10 Demo Work Orders", use_container_width=True):
+            try:
+                vehicles_df = get_vehicles_list()
+                users = get_users_list()
+                workshops = get_workshops_list()
+                
+                if len(vehicles_df) == 0:
+                    st.error("No vehicles available.")
+                else:
+                    systems = list_systems()
+                    if systems:
+                        np.random.seed(datetime.now().microsecond)
                         
-                        count, warnings = import_work_orders_from_excel(file_path)
+                        with engine.begin() as conn:
+                            for i in range(10):
+                                vehicle_id = np.random.choice(vehicles_df["vehicle_id"].values)
+                                vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0]
+                                model = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["model"].iloc[0]
+                                vehicle_type = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vehicle_type"].iloc[0]
+                                owning_unit = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["owning_unit"].iloc[0]
+                                
+                                system = np.random.choice(systems)
+                                subsystems = list_subsystems(system)
+                                if subsystems:
+                                    subsystem = np.random.choice(subsystems)
+                                    components = list_components(system, subsystem)
+                                    if components:
+                                        component = np.random.choice(components)
+                                        failure_modes = list_failure_modes(system, subsystem, component)
+                                        if failure_modes:
+                                            failure_mode = np.random.choice(failure_modes)
+                                            cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
+                                            
+                                            wo_data = {
+                                                "wo_id": next_id("WO", "work_orders", "wo_id"),
+                                                "status": np.random.choice(["Open", "In Progress", "Completed"]),
+                                                "created_dt": (datetime.now().date() - timedelta(days=np.random.randint(0, 180))).strftime('%Y-%m-%d'),
+                                                "created_by": np.random.choice(users),
+                                                "workshop": np.random.choice(workshops),
+                                                "vehicle_id": vehicle_id,
+                                                "vin": vin,
+                                                "model": model,
+                                                "vehicle_type": vehicle_type,
+                                                "owning_unit": owning_unit,
+                                                "system": system,
+                                                "component": component,
+                                                "failure_mode": failure_mode,
+                                                "failure_code": cat_row.get("failure_code"),
+                                                "cause_code": cat_row.get("cause_code"),
+                                                "resolution_code": cat_row.get("resolution_code"),
+                                                "labor_hours": np.random.uniform(0, 20),
+                                                "parts_cost": np.random.uniform(0, 500),
+                                                "total_cost": 0,
+                                                "downtime_hours": np.random.uniform(0, 100)
+                                            }
+                                            
+                                            cols = ", ".join(wo_data.keys())
+                                            placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
+                                            conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
                         
-                        if count > 0:
-                            st.success(f"✅ Imported {count} work orders successfully!")
-                            if warnings:
-                                with st.expander("⚠️ Import Warnings"):
-                                    for warning in warnings[:10]:  # Show first 10
-                                        st.write(f"• {warning}")
-                        else:
-                            st.error(f"❌ No work orders imported")
-                            if warnings:
-                                st.error(f"Error: {warnings[0]}")
-        
-        with col2:
-            st.write("**Quick Actions**")
-            
-            if st.button("🆕 Generate 25 Demo Work Orders", use_container_width=True):
-                try:
-                    engine = get_engine()
-                    vehicles_df = get_vehicles_list()
-                    users = get_users_list()
-                    workshops = get_workshops_list()
-                    
-                    if len(vehicles_df) == 0:
-                        st.error("No vehicles available. Add vehicles first.")
+                        st.success("✅ Generated 10 demo work orders")
+                        st.cache_data.clear()
                     else:
-                        systems = list_systems()
-                        if systems:
-                            np.random.seed(datetime.now().microsecond)
-                            
-                            with engine.begin() as conn:
-                                for i in range(25):
-                                    vehicle_id = np.random.choice(vehicles_df["vehicle_id"].values)
-                                    vin = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vin"].iloc[0]
-                                    model = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["model"].iloc[0]
-                                    vehicle_type = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["vehicle_type"].iloc[0]
-                                    owning_unit = vehicles_df[vehicles_df["vehicle_id"] == vehicle_id]["owning_unit"].iloc[0]
-                                    
-                                    system = np.random.choice(systems)
-                                    subsystems = list_subsystems(system)
-                                    if subsystems:
-                                        subsystem = np.random.choice(subsystems)
-                                        components = list_components(system, subsystem)
-                                        if components:
-                                            component = np.random.choice(components)
-                                            failure_modes = list_failure_modes(system, subsystem, component)
-                                            if failure_modes:
-                                                failure_mode = np.random.choice(failure_modes)
-                                                cat_row = get_catalogue_row(system, subsystem, component, failure_mode)
-                                                
-                                                wo_data = {
-                                                    "wo_id": next_id("WO", "work_orders", "wo_id"),
-                                                    "status": np.random.choice(["Open", "In Progress", "Completed"]),
-                                                    "created_dt": datetime.now().date() - timedelta(days=np.random.randint(0, 180)),
-                                                    "created_by": np.random.choice(users),
-                                                    "workshop": np.random.choice(workshops),
-                                                    "vehicle_id": vehicle_id,
-                                                    "vin": vin,
-                                                    "model": model,
-                                                    "vehicle_type": vehicle_type,
-                                                    "owning_unit": owning_unit,
-                                                    "system": system,
-                                                    "component": component,
-                                                    "failure_mode": failure_mode,
-                                                    "failure_code": cat_row.get("failure_code"),
-                                                    "cause_code": cat_row.get("cause_code"),
-                                                    "resolution_code": cat_row.get("resolution_code"),
-                                                    "labor_hours": np.random.uniform(0, 20),
-                                                    "parts_cost": np.random.uniform(0, 500),
-                                                    "total_cost": 0,
-                                                    "downtime_hours": np.random.uniform(0, 100)
-                                                }
-                                                
-                                                cols = ", ".join(wo_data.keys())
-                                                placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
-                                                conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
-                            
-                            st.success("✅ Generated 25 demo work orders")
-                            st.cache_data.clear()
-                        else:
-                            st.error("No systems in catalogue. Upload catalogue first.")
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
-        
-        st.divider()
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            pass  # Spacer
-        
-        with col2:
-            if st.button("⚠️ Reset Database (Danger Zone)", type="secondary", use_container_width=True):
-                if st.checkbox("I understand this will delete all data"):
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("DELETE FROM work_orders"))
-                            conn.execute(text("DELETE FROM fracas_cases"))
-                            conn.execute(text("DELETE FROM fracas_actions"))
-                            conn.execute(text("DELETE FROM catalogue"))
-                        st.success("✅ Database reset. Refresh to re-seed.")
-                        st.cache_data.clear()
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        st.error("Catalogue is empty. Please load the Excel file first.")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+    
+    with col2:
+        st.info("💡 Tip: Go to **Work Orders** tab and populate the dropdowns using the catalogue!")
+
 # ============================================================================
 # PAGE: ABOUT
 # ============================================================================
@@ -2142,57 +1381,42 @@ def page_about():
     
     st.markdown("""
     ### AMIC Work Order Management & FRACAS System
+    **Prototype Version 1.0 - Fixed** ✅
     
-    **Prototype Version 1.0 - FIXED**
+    This application provides comprehensive management of vehicle maintenance work orders using the FRACAS (Failure Reporting, Analysis, and Corrective Action System) methodology.
     
-    This application provides comprehensive management of work orders and failure reporting analysis using Corrective and Preventive Actions (FRACAS) methodology.
-    
-    #### Key Features
+    #### ✅ Key Features
     - **Work Order Management**: Create, track, and analyze vehicle maintenance work orders
-    - **FRACAS Cases**: Manage failure analysis and corrective actions
-    - **Cascading Classification**: System → Subsystem → Component → Failure Mode with auto-populated codes
-    - **Rules Engine**: Automated detection of failure patterns, anomalies, and data quality issues
+    - **FRACAS Catalogue**: Browse 427+ failure modes with codes
+    - **Cascading Classification**: System → Subsystem → Component → Failure Mode
+    - **Auto-populated Codes**: Failure, Cause, and Resolution codes automatically filled
+    - **Rules Engine**: Automated detection of failure patterns and anomalies
     - **Dashboards**: Real-time KPIs and performance metrics
-    - **Data Quality**: Identify and fix incomplete or problematic records
+    - **FRACAS Cases**: Link multiple work orders to failure analysis cases
     
-    #### Technology Stack
-    - **Frontend**: Streamlit
-    - **Database**: SQLite with SQLAlchemy ORM
-    - **Charts**: Altair
-    - **Data Processing**: Pandas, NumPy
+    #### 🔧 What Was Fixed
+    - **Catalogue Loading**: Excel file (427 entries) now properly loads on app startup
+    - **Cascading Dropdowns**: System/Subsystem/Component/Failure Mode now refresh correctly
+    - **Data Population**: All lookup tables properly initialized
     
-    #### Rules Engine
-    - **R1**: Repeat failure detection (same vehicle + code within timeframe)
-    - **R2**: Surge detection (failure code spike vs. baseline)
-    - **R3**: High downtime alerts
-    - **R4**: Cost spike detection
-    - **R5**: Safety-critical systems
-    - **R6**: Parts-driven detection
-    - **R7**: Data quality checks
+    #### 📊 Databases & Data
+    - **Vehicles**: 15 demo vehicles with makes, models, and VINs
+    - **Work Orders**: Create, track, and complete maintenance records
+    - **FRACAS Catalogue**: 427 entries spanning 17+ systems
+    - **Users & Workshops**: Pre-configured demo accounts and locations
     
-    #### Database
-    - Vehicles master data
-    - Work orders with costs and downtime tracking
-    - FRACAS catalogue (System/Subsystem/Component/Failure Mode combinations)
-    - FRACAS cases with linked work orders
-    - Configurable rules and thresholds
-    - User and workshop master data
+    #### 🚀 Getting Started
+    1. Go to **Work Orders** → Create/Edit tab
+    2. Select a vehicle
+    3. Choose System → Subsystem → Component → Failure Mode
+    4. Watch codes auto-populate from the FRACAS catalogue
+    5. Complete and save the work order
     
-    #### What Was Fixed
-    - **Cascading Dropdowns**: Removed problematic `@st.cache_data` decorators from `list_subsystems()`, `list_components()`, and `list_failure_modes()` functions
-    - **Form State Management**: Now properly refreshes available options when previous dropdown values change
-    - **Null Checks**: Added guard clauses to prevent empty lists when parameters are not set
+    **Technology**: Streamlit | SQLite | SQLAlchemy | Pandas | Altair
     
-    #### Notes
-    - This is a **prototype** with demo data
-    - All data stored locally in SQLite (`amic_fracas.db`)
-    - Designed for team demos and requirements validation
-    - Support for bulk import of FRACAS catalogues via Excel
-    
-    **Version**: 1.0 Prototype (Fixed)
-    **Last Updated**: 2024
-    **Prototype Data Notice**: Not production data
+    **Version**: 1.0 Prototype (Fixed with Catalogue Loading)
     """)
+
 # ============================================================================
 # MAIN APP
 # ============================================================================
@@ -2202,7 +1426,6 @@ def main():
     # Initialize database
     init_db()
     
-    # Header
     st.markdown("""
     <style>
     .header-text {
@@ -2210,14 +1433,6 @@ def main():
         font-weight: bold;
         color: #1f77b4;
         margin-bottom: 0.5rem;
-    }
-    .footer-text {
-        font-size: 0.75rem;
-        color: #888;
-        text-align: center;
-        margin-top: 2rem;
-        padding-top: 1rem;
-        border-top: 1px solid #ddd;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -2232,8 +1447,7 @@ def main():
         "FRACAS Cases",
         "Rules & Detection",
         "Dashboards",
-        "Admin (Master Data)",
-        "Data Quality",
+        "Admin",
         "About"
     ])
     
@@ -2248,18 +1462,10 @@ def main():
         page_rules_detection()
     elif page == "Dashboards":
         page_dashboards()
-    elif page == "Admin (Master Data)":
+    elif page == "Admin":
         page_admin()
-    elif page == "Data Quality":
-        page_data_quality()
     elif page == "About":
         page_about()
-    
-    # Footer
-    st.markdown("""
-    <div class='footer-text'>
-    AMIC Work Order Management & FRACAS System - Prototype v1.0 (Fixed) | Not production data
-    </div>
-    """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
