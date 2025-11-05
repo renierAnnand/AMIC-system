@@ -288,15 +288,16 @@ def seed_data(engine):
         
         # Seed catalogue from Excel file - LOAD THE NEW COMPREHENSIVE CATALOGUE
         try:
-            # Try to load the new comprehensive catalogue first
+            # PRIORITY 1: Load v5 (the updated file with all codes)
             try:
                 df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
                                   sheet_name="FRACAS_FailureMode_Catalogue")
-                st.write("")  # Silent success
-            except:
-                # Fallback to v3 if v5 not found
+                print("✓ Loaded v5 catalogue (427 entries)")
+            except FileNotFoundError:
+                # PRIORITY 2: Load v3 if v5 not found
                 df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v3_AllComponents.xlsx', 
                                   sheet_name="FRACAS_FailureMode_Catalogue")
+                print("✓ Loaded v3 catalogue (fallback)")
             
             # Forward fill NaN values for System and Subsystem
             df['System'] = df['System'].ffill()
