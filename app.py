@@ -1403,6 +1403,122 @@ def page_admin():
     
     engine = get_engine()
     
+    # Quick import section
+    st.subheader("⚡ Quick Import (Recommended)")
+    st.write("Import the demo files to populate the system with data.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📥 Import FRACAS Catalogue (427 entries)", use_container_width=True, key="import_cat"):
+            with st.spinner("Loading catalogue..."):
+                try:
+                    # Clear existing
+                    with engine.begin() as conn:
+                        conn.execute(text("DELETE FROM catalogue"))
+                    
+                    # Load from file
+                    excel_path = '/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx'
+                    df = pd.read_excel(excel_path, sheet_name="FRACAS_FailureMode_Catalogue")
+                    
+                    # Clean
+                    for col in df.columns:
+                        if df[col].dtype == 'object':
+                            df[col] = df[col].str.strip()
+                    df['System'] = df['System'].ffill()
+                    df['Subsystem'] = df['Subsystem'].ffill()
+                    df = df.dropna(subset=['System', 'Component', 'Failure Mode'])
+                    df = df.fillna("")
+                    
+                    # Insert
+                    count = 0
+                    with engine.begin() as conn:
+                        for idx, row in df.iterrows():
+                            try:
+                                conn.execute(text("""
+                                    INSERT INTO catalogue (system, subsystem, component, failure_mode, 
+                                                         recommended_action, failure_code, cause_code, resolution_code)
+                                    VALUES (:sys, :sub, :comp, :fm, :action, :fc, :cc, :rc)
+                                """), {
+                                    "sys": str(row.get("System", "")).strip(),
+                                    "sub": str(row.get("Subsystem", "")).strip(),
+                                    "comp": str(row.get("Component", "")).strip(),
+                                    "fm": str(row.get("Failure Mode", "")).strip(),
+                                    "action": str(row.get("Recommended Action", "")).strip(),
+                                    "fc": str(row.get("Failure Code", "")).strip(),
+                                    "cc": str(row.get("Cause Code", "")).strip(),
+                                    "rc": str(row.get("Resolution Code", "")).strip()
+                                })
+                                count += 1
+                            except:
+                                pass
+                    
+                    st.success(f"✅ Loaded {count} catalogue entries!")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    
+    with col2:
+        if st.button("📥 Import Demo Work Orders (300 records)", use_container_width=True, key="import_wo"):
+            with st.spinner("Loading work orders..."):
+                try:
+                    excel_path = '/mnt/user-data/uploads/Fake_WorkOrders_AMIC.xlsx'
+                    df = pd.read_excel(excel_path, sheet_name="Sheet1")
+                    
+                    users = get_users_list()
+                    workshops = get_workshops_list()
+                    
+                    count = 0
+                    errors = []
+                    
+                    with engine.begin() as conn:
+                        for idx, row in df.iterrows():
+                            try:
+                                wo_data = {
+                                    "wo_id": f"WO-{idx+1:06d}",
+                                    "status": str(row.get("Status", "Open")).strip(),
+                                    "created_dt": str(pd.to_datetime(row.get("Date Created")).date()) if pd.notna(row.get("Date Created")) else datetime.now().date().strftime('%Y-%m-%d'),
+                                    "completed_dt": str(pd.to_datetime(row.get("Completion Date")).date()) if pd.notna(row.get("Completion Date")) else None,
+                                    "created_by": str(row.get("Created By", users[0] if users else "admin")).strip(),
+                                    "assigned_to": str(row.get("Assigned To", "")).strip() if pd.notna(row.get("Assigned To")) else None,
+                                    "workshop": str(row.get("Workshop", workshops[0] if workshops else "Workshop A")).strip(),
+                                    "sector": str(row.get("Sector", "")).strip(),
+                                    "vehicle_id": str(row.get("Vehicle ID", "VEH-0001")).strip(),
+                                    "vin": str(row.get("VIN", "")).strip(),
+                                    "model": str(row.get("Model", "")).strip(),
+                                    "vehicle_type": str(row.get("Vehicle Type", "")).strip(),
+                                    "owning_unit": str(row.get("Vehicle Type", "")).strip(),
+                                    "system": str(row.get("System", "")).strip(),
+                                    "subsystem": str(row.get("Subsystem", "")).strip(),
+                                    "component": str(row.get("Component", "")).strip(),
+                                    "failure_mode": str(row.get("Failure Mode", "")).strip(),
+                                    "failure_code": str(row.get("Failure Code", "")).strip(),
+                                    "cause_code": str(row.get("Cause Code", "")).strip(),
+                                    "resolution_code": str(row.get("Resolution Code", "")).strip(),
+                                    "cause_text": str(row.get("Cause", "")).strip(),
+                                    "action_text": str(row.get("Recommended Action", "")).strip(),
+                                    "notes": str(row.get("Remarks", "")).strip(),
+                                    "labor_hours": float(row.get("Labor Hours", 0)) if pd.notna(row.get("Labor Hours")) else 0,
+                                    "parts_cost": float(row.get("Parts Cost", 0)) if pd.notna(row.get("Parts Cost")) else 0,
+                                    "downtime_hours": float(row.get("Downtime Hours", 0)) if pd.notna(row.get("Downtime Hours")) else 0,
+                                    "total_cost": float(row.get("Parts Cost", 0)) if pd.notna(row.get("Parts Cost")) else 0
+                                }
+                                
+                                cols = ", ".join(wo_data.keys())
+                                placeholders = ", ".join([f":{k}" for k in wo_data.keys()])
+                                conn.execute(text(f"INSERT INTO work_orders ({cols}) VALUES ({placeholders})"), wo_data)
+                                count += 1
+                            except Exception as e:
+                                errors.append(str(e)[:50])
+                    
+                    st.success(f"✅ Loaded {count} work orders!")
+                    if errors:
+                        st.warning(f"⚠️ {len(errors)} rows had issues")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    
+    st.divider()
     st.subheader("Database Status")
     
     col1, col2, col3, col4 = st.columns(4)
