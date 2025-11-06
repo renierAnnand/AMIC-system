@@ -3274,10 +3274,12 @@ def init_db():
         result = conn.execute(text("SELECT COUNT(*) FROM work_orders"))
         wo_count = result.scalar()
     
+    # Only seed vehicles if needed, work orders are imported from Excel
     if vehicles_count == 0:
         seed_data(engine)
-    if wo_count == 0:
-        seed_work_orders(engine)
+    # Commented out: We now use imported work orders from Excel (5000 entries)
+    # if wo_count == 0:
+    #     seed_work_orders(engine)
 
 def seed_data(engine):
     """Seed database with demo vehicles."""
