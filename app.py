@@ -1,7 +1,8 @@
 """
-AMIC Work Order Management & FRACAS System - ENHANCED VERSION
+AMIC Work Order Management & FRACAS System - ENHANCED VERSION (WHITE THEME)
 Advanced dashboards, analytics, KPIs, and insights
 Hard-coded catalogue + pre-loaded demo data
+Light/White background theme
 """
 import streamlit as st
 import pandas as pd
@@ -14,7 +15,7 @@ import altair as alt
 import json
 
 # ============================================================================
-# CONFIG & SESSION STATE
+# CONFIG & SESSION STATE & THEMING
 # ============================================================================
 st.set_page_config(
     page_title="AMIC FRACAS System Enhanced",
@@ -22,6 +23,173 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ============================================================================
+# WHITE THEME STYLING
+# ============================================================================
+st.markdown("""
+<style>
+/* Main app background - White */
+[data-testid="stAppViewContainer"] {
+    background-color: #FFFFFF;
+    color: #111827;
+}
+
+/* Sidebar background - Light Gray */
+[data-testid="stSidebar"] {
+    background-color: #F9FAFB;
+}
+
+/* Main content area */
+[data-testid="stMain"] {
+    background-color: #FFFFFF;
+}
+
+/* Block containers - White background */
+.block-container {
+    background-color: #FFFFFF;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Text inputs - White with dark border */
+.stTextInput > div > div > input,
+.stSelectbox > div > div,
+.stNumberInput > div > div > input,
+.stDateInput > div > div > input {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Text areas */
+.stTextArea > div > div > textarea {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Dataframes and tables */
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: #3B82F6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.stButton > button:hover {
+    background-color: #2563EB;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: #F3F4F6;
+    border-bottom: 2px solid #E5E7EB;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #4B5563;
+    background-color: transparent;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #3B82F6;
+    border-bottom: 3px solid #3B82F6;
+}
+
+/* Metric cards */
+.stMetric {
+    background-color: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+/* Divider */
+hr {
+    background-color: #E5E7EB;
+    border: none;
+    height: 1px;
+}
+
+/* Headers and text */
+h1, h2, h3, h4, h5, h6 {
+    color: #111827;
+}
+
+/* Info/Success/Error messages */
+.stSuccess {
+    background-color: #D1FAE5 !important;
+    color: #065F46 !important;
+    border: 1px solid #A7F3D0 !important;
+}
+
+.stError {
+    background-color: #FEE2E2 !important;
+    color: #7F1D1D !important;
+    border: 1px solid #FECACA !important;
+}
+
+.stInfo {
+    background-color: #DBEAFE !important;
+    color: #1E40AF !important;
+    border: 1px solid #BFDBFE !important;
+}
+
+.stWarning {
+    background-color: #FEF3C7 !important;
+    color: #78350F !important;
+    border: 1px solid #FDE68A !important;
+}
+
+/* Charts container */
+.altair-container {
+    background-color: #FFFFFF;
+}
+
+/* Sidebar text */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+    color: #111827;
+}
+
+/* Success badge in sidebar */
+.stSidebarContent {
+    color: #111827;
+}
+
+/* Markdown text */
+[data-testid="stMarkdownContainer"] {
+    color: #111827;
+}
+
+/* Links */
+a {
+    color: #3B82F6;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #2563EB;
+    text-decoration: underline;
+}
+
+/* Export button */
+[data-testid="stDownloadButton"] > button {
+    background-color: #10B981;
+    color: white;
+}
+
+[data-testid="stDownloadButton"] > button:hover {
+    background-color: #059669;
+}
+</style>
+""", unsafe_allow_html=True)
 
 if "app_initialized" not in st.session_state:
     st.session_state.app_initialized = False
@@ -159,9 +327,9 @@ CATALOGUE_HIERARCHY = {
 }
 
 # ============================================================================
-# DATABASE SETUP (Same as before)
+# DATABASE SETUP
 # ============================================================================
-DB_FILE = "/tmp/amic_fracas_enhanced.db"
+DB_FILE = "/tmp/amic_fracas_enhanced_white.db"
 
 @st.cache_resource
 def get_engine():
@@ -470,7 +638,9 @@ def calculate_failure_rate(wos):
     return len(wos) / vehicles_count if vehicles_count > 0 else 0
 
 def get_system_reliability(wos):
-    """Get reliability score for each system (inverse of failure rate)"""
+    """Get reliability score for each system"""
+    if len(wos) == 0:
+        return {}
     system_failures = wos.groupby('system').size()
     total = len(wos)
     reliability = {}
@@ -488,13 +658,14 @@ def get_vehicle_health(wos):
         in_prog_count = len(vehicle_wos[vehicle_wos['status'] == 'In Progress'])
         total_issues = len(vehicle_wos)
         
-        # Score: 100 = healthy, 0 = critical
         active_issues = open_count + in_prog_count
         health_scores[vehicle] = max(0, 100 - (active_issues * 20) - (total_issues * 2))
     return health_scores
 
 def get_technician_stats(wos):
     """Get performance stats for each technician"""
+    if len(wos) == 0:
+        return {}
     tech_stats = {}
     for tech in wos['assigned_to'].unique():
         tech_wos = wos[wos['assigned_to'] == tech]
@@ -523,7 +694,6 @@ def page_enhanced_dashboards():
         st.info("No work order data available.")
         return
     
-    # ====== TAB 1: EXECUTIVE SUMMARY ======
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📈 Executive Summary",
         "🔧 System Health",
@@ -535,7 +705,6 @@ def page_enhanced_dashboards():
     with tab1:
         st.subheader("Executive Summary")
         
-        # KPI Cards
         col1, col2, col3, col4, col5 = st.columns(5)
         
         total_wos = len(wos)
@@ -557,13 +726,11 @@ def page_enhanced_dashboards():
         
         st.divider()
         
-        # Trend Analysis
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("Work Order Trends (Last 30 Days)")
             
-            # Generate 30-day trend data
             today = datetime.now().date()
             last_30_days = wos[pd.to_datetime(wos['created_dt']).dt.date >= (today - timedelta(days=30))]
             
@@ -575,13 +742,16 @@ def page_enhanced_dashboards():
             
             trend_df = pd.DataFrame(daily_data)
             
-            trend_chart = alt.Chart(trend_df).mark_line(point=True).encode(
-                x=alt.X("Date:T", title="Date"),
-                y=alt.Y("WOs Created:Q", title="Work Orders"),
-                tooltip=["Date", "WOs Created"]
-            ).properties(height=300).interactive()
-            
-            st.altair_chart(trend_chart, use_container_width=True)
+            if len(trend_df) > 0:
+                trend_chart = alt.Chart(trend_df).mark_line(point=True, color='#3B82F6').encode(
+                    x=alt.X("Date:T", title="Date"),
+                    y=alt.Y("WOs Created:Q", title="Work Orders"),
+                    tooltip=["Date", "WOs Created"]
+                ).properties(height=300).interactive()
+                
+                st.altair_chart(trend_chart, use_container_width=True)
+            else:
+                st.info("No data available for trend")
         
         with col2:
             st.subheader("Status Distribution")
@@ -592,17 +762,17 @@ def page_enhanced_dashboards():
                 'Count': status_data.values
             })
             
-            colors = {'Completed': '#2ecc71', 'Closed': '#27ae60', 'In Progress': '#f39c12', 'Open': '#e74c3c'}
-            status_df['Color'] = status_df['Status'].map(colors)
-            
-            status_chart = alt.Chart(status_df).mark_bar().encode(
-                x=alt.X("Status:N", title="Status"),
-                y=alt.Y("Count:Q", title="Count"),
-                color=alt.Color("Status:N", scale=alt.Scale(domain=['Completed', 'Closed', 'In Progress', 'Open'], 
-                                                              range=['#2ecc71', '#27ae60', '#f39c12', '#e74c3c']))
-            ).properties(height=300)
-            
-            st.altair_chart(status_chart, use_container_width=True)
+            if len(status_df) > 0:
+                status_chart = alt.Chart(status_df).mark_bar().encode(
+                    x=alt.X("Status:N", title="Status"),
+                    y=alt.Y("Count:Q", title="Count"),
+                    color=alt.Color("Status:N", scale=alt.Scale(
+                        domain=['Completed', 'Closed', 'In Progress', 'Open'], 
+                        range=['#10B981', '#059669', '#F59E0B', '#EF4444']
+                    ))
+                ).properties(height=300)
+                
+                st.altair_chart(status_chart, use_container_width=True)
     
     with tab2:
         st.subheader("System Health & Reliability")
@@ -613,161 +783,163 @@ def page_enhanced_dashboards():
             st.subheader("Top Failing Systems")
             
             system_failures = wos['system'].value_counts().head(10)
-            system_df = pd.DataFrame({
-                'System': system_failures.index,
-                'Failures': system_failures.values
-            })
-            
-            system_chart = alt.Chart(system_df).mark_barh().encode(
-                y=alt.Y("System:N", sort="-x"),
-                x=alt.X("Failures:Q"),
-                color=alt.Color("Failures:Q", scale=alt.Scale(scheme='reds'))
-            ).properties(height=300)
-            
-            st.altair_chart(system_chart, use_container_width=True)
+            if len(system_failures) > 0:
+                system_df = pd.DataFrame({
+                    'System': system_failures.index,
+                    'Failures': system_failures.values
+                })
+                
+                system_chart = alt.Chart(system_df).mark_barh().encode(
+                    y=alt.Y("System:N", sort="-x", title="System"),
+                    x=alt.X("Failures:Q", title="Number of Failures"),
+                    color=alt.Color("Failures:Q", scale=alt.Scale(scheme='reds'))
+                ).properties(height=300)
+                
+                st.altair_chart(system_chart, use_container_width=True)
+            else:
+                st.info("No system data available")
         
         with col2:
             st.subheader("System Reliability Score")
             
             reliability = get_system_reliability(wos)
-            reliability_df = pd.DataFrame({
-                'System': list(reliability.keys()),
-                'Reliability %': list(reliability.values())
-            }).sort_values('Reliability %', ascending=False).head(10)
-            
-            reliability_chart = alt.Chart(reliability_df).mark_bar().encode(
-                y=alt.Y("System:N", sort="-x"),
-                x=alt.X("Reliability %:Q", scale=alt.Scale(domain=[0, 100])),
-                color=alt.Color("Reliability %:Q", scale=alt.Scale(scheme='greens'))
-            ).properties(height=300)
-            
-            st.altair_chart(reliability_chart, use_container_width=True)
+            if len(reliability) > 0:
+                reliability_df = pd.DataFrame({
+                    'System': list(reliability.keys()),
+                    'Reliability %': list(reliability.values())
+                }).sort_values('Reliability %', ascending=False).head(10)
+                
+                reliability_chart = alt.Chart(reliability_df).mark_bar().encode(
+                    y=alt.Y("System:N", sort="-x", title="System"),
+                    x=alt.X("Reliability %:Q", scale=alt.Scale(domain=[0, 100]), title="Reliability %"),
+                    color=alt.Color("Reliability %:Q", scale=alt.Scale(scheme='greens'))
+                ).properties(height=300)
+                
+                st.altair_chart(reliability_chart, use_container_width=True)
+            else:
+                st.info("No reliability data available")
         
         st.divider()
         
-        # Top failure modes
         st.subheader("Top Failure Modes")
         top_failures = wos['failure_mode'].value_counts().head(15)
-        failure_df = pd.DataFrame({
-            'Failure Mode': top_failures.index,
-            'Count': top_failures.values
-        })
-        
-        failure_chart = alt.Chart(failure_df).mark_bar().encode(
-            y=alt.Y("Failure Mode:N", sort="-x"),
-            x=alt.X("Count:Q"),
-            color=alt.Color("Count:Q", scale=alt.Scale(scheme='oranges'))
-        ).properties(height=400)
-        
-        st.altair_chart(failure_chart, use_container_width=True)
+        if len(top_failures) > 0:
+            failure_df = pd.DataFrame({
+                'Failure Mode': top_failures.index,
+                'Count': top_failures.values
+            })
+            
+            failure_chart = alt.Chart(failure_df).mark_bar(color='#F97316').encode(
+                y=alt.Y("Failure Mode:N", sort="-x", title="Failure Mode"),
+                x=alt.X("Count:Q", title="Count"),
+                color=alt.Color("Count:Q", scale=alt.Scale(scheme='oranges'))
+            ).properties(height=400)
+            
+            st.altair_chart(failure_chart, use_container_width=True)
+        else:
+            st.info("No failure mode data available")
     
     with tab3:
         st.subheader("Vehicle Health Analysis")
         
         health_scores = get_vehicle_health(wos)
-        health_df = pd.DataFrame({
-            'Vehicle': list(health_scores.keys()),
-            'Health Score': list(health_scores.values())
-        }).sort_values('Health Score', ascending=False)
-        
-        # Health gauge chart
-        health_chart = alt.Chart(health_df).mark_bar().encode(
-            y=alt.Y("Vehicle:N", sort="-x"),
-            x=alt.X("Health Score:Q", scale=alt.Scale(domain=[0, 100])),
-            color=alt.condition(
-                alt.datum['Health Score'] >= 70,
-                alt.value('#2ecc71'),  # Green
-                alt.condition(
-                    alt.datum['Health Score'] >= 40,
-                    alt.value('#f39c12'),  # Yellow
-                    alt.value('#e74c3c')   # Red
+        if len(health_scores) > 0:
+            health_df = pd.DataFrame({
+                'Vehicle': list(health_scores.keys()),
+                'Health Score': list(health_scores.values())
+            }).sort_values('Health Score', ascending=False)
+            
+            health_chart = alt.Chart(health_df).mark_bar().encode(
+                y=alt.Y("Vehicle:N", sort="-x", title="Vehicle"),
+                x=alt.X("Health Score:Q", scale=alt.Scale(domain=[0, 100]), title="Health Score"),
+                color=alt.condition(
+                    alt.datum['Health Score'] >= 70,
+                    alt.value('#10B981'),
+                    alt.condition(
+                        alt.datum['Health Score'] >= 40,
+                        alt.value('#F59E0B'),
+                        alt.value('#EF4444')
+                    )
                 )
-            )
-        ).properties(height=300)
-        
-        st.altair_chart(health_chart, use_container_width=True)
-        
-        st.divider()
-        
-        # Vehicle issue breakdown
-        st.subheader("Active Issues by Vehicle")
-        vehicle_issues = []
-        for vehicle in wos['vehicle_id'].unique():
-            vehicle_wos = wos[wos['vehicle_id'] == vehicle]
-            vehicle_issues.append({
-                'Vehicle': vehicle,
-                'Open': len(vehicle_wos[vehicle_wos['status'] == 'Open']),
-                'In Progress': len(vehicle_wos[vehicle_wos['status'] == 'In Progress']),
-                'Total Issues': len(vehicle_wos)
-            })
-        
-        issues_df = pd.DataFrame(vehicle_issues)
-        
-        st.dataframe(
-            issues_df,
-            use_container_width=True,
-            height=300,
-            column_config={
-                'Vehicle': st.column_config.TextColumn('Vehicle ID'),
-                'Open': st.column_config.NumberColumn('Open', format='%d'),
-                'In Progress': st.column_config.NumberColumn('In Progress', format='%d'),
-                'Total Issues': st.column_config.NumberColumn('Total Issues', format='%d')
-            }
-        )
+            ).properties(height=300)
+            
+            st.altair_chart(health_chart, use_container_width=True)
+            
+            st.divider()
+            
+            st.subheader("Active Issues by Vehicle")
+            vehicle_issues = []
+            for vehicle in wos['vehicle_id'].unique():
+                vehicle_wos = wos[wos['vehicle_id'] == vehicle]
+                vehicle_issues.append({
+                    'Vehicle': vehicle,
+                    'Open': len(vehicle_wos[vehicle_wos['status'] == 'Open']),
+                    'In Progress': len(vehicle_wos[vehicle_wos['status'] == 'In Progress']),
+                    'Total Issues': len(vehicle_wos)
+                })
+            
+            issues_df = pd.DataFrame(vehicle_issues)
+            st.dataframe(issues_df, use_container_width=True)
+        else:
+            st.info("No vehicle data available")
     
     with tab4:
         st.subheader("Technician Performance Metrics")
         
         tech_stats = get_technician_stats(wos)
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Completion Rate by Technician")
+        if len(tech_stats) > 0:
+            col1, col2 = st.columns(2)
             
-            tech_comp_df = pd.DataFrame({
+            with col1:
+                st.subheader("Completion Rate by Technician")
+                
+                tech_comp_df = pd.DataFrame({
+                    'Technician': list(tech_stats.keys()),
+                    'Completion Rate %': [tech_stats[t]['completion_rate'] for t in tech_stats.keys()]
+                }).sort_values('Completion Rate %', ascending=False)
+                
+                if len(tech_comp_df) > 0:
+                    comp_chart = alt.Chart(tech_comp_df).mark_bar(color='#3B82F6').encode(
+                        y=alt.Y("Technician:N", sort="-x", title="Technician"),
+                        x=alt.X("Completion Rate %:Q", scale=alt.Scale(domain=[0, 100]), title="Completion %"),
+                        color=alt.Color("Completion Rate %:Q", scale=alt.Scale(scheme='blues'))
+                    ).properties(height=300)
+                    
+                    st.altair_chart(comp_chart, use_container_width=True)
+            
+            with col2:
+                st.subheader("Average Labor Hours")
+                
+                tech_labor_df = pd.DataFrame({
+                    'Technician': list(tech_stats.keys()),
+                    'Avg Labor Hours': [tech_stats[t]['avg_labor'] for t in tech_stats.keys()]
+                }).sort_values('Avg Labor Hours', ascending=False)
+                
+                if len(tech_labor_df) > 0:
+                    labor_chart = alt.Chart(tech_labor_df).mark_bar(color='#8B5CF6').encode(
+                        y=alt.Y("Technician:N", sort="-x", title="Technician"),
+                        x=alt.X("Avg Labor Hours:Q", title="Hours"),
+                        color=alt.Color("Avg Labor Hours:Q", scale=alt.Scale(scheme='purples'))
+                    ).properties(height=300)
+                    
+                    st.altair_chart(labor_chart, use_container_width=True)
+            
+            st.divider()
+            
+            st.subheader("Detailed Technician Statistics")
+            
+            tech_detail_df = pd.DataFrame({
                 'Technician': list(tech_stats.keys()),
-                'Completion Rate %': [tech_stats[t]['completion_rate'] for t in tech_stats.keys()]
-            }).sort_values('Completion Rate %', ascending=False)
+                'Total WOs': [tech_stats[t]['total'] for t in tech_stats.keys()],
+                'Completed': [tech_stats[t]['completed'] for t in tech_stats.keys()],
+                'Completion Rate %': [f"{tech_stats[t]['completion_rate']:.1f}%" for t in tech_stats.keys()],
+                'Avg Labor Hours': [f"{tech_stats[t]['avg_labor']:.1f}" for t in tech_stats.keys()]
+            }).sort_values('Total WOs', ascending=False)
             
-            comp_chart = alt.Chart(tech_comp_df).mark_bar().encode(
-                y=alt.Y("Technician:N", sort="-x"),
-                x=alt.X("Completion Rate %:Q", scale=alt.Scale(domain=[0, 100])),
-                color=alt.Color("Completion Rate %:Q", scale=alt.Scale(scheme='blues'))
-            ).properties(height=300)
-            
-            st.altair_chart(comp_chart, use_container_width=True)
-        
-        with col2:
-            st.subheader("Average Labor Hours")
-            
-            tech_labor_df = pd.DataFrame({
-                'Technician': list(tech_stats.keys()),
-                'Avg Labor Hours': [tech_stats[t]['avg_labor'] for t in tech_stats.keys()]
-            }).sort_values('Avg Labor Hours', ascending=False)
-            
-            labor_chart = alt.Chart(tech_labor_df).mark_bar().encode(
-                y=alt.Y("Technician:N", sort="-x"),
-                x=alt.X("Avg Labor Hours:Q"),
-                color=alt.Color("Avg Labor Hours:Q", scale=alt.Scale(scheme='purples'))
-            ).properties(height=300)
-            
-            st.altair_chart(labor_chart, use_container_width=True)
-        
-        st.divider()
-        
-        # Detailed technician table
-        st.subheader("Detailed Technician Statistics")
-        
-        tech_detail_df = pd.DataFrame({
-            'Technician': list(tech_stats.keys()),
-            'Total WOs': [tech_stats[t]['total'] for t in tech_stats.keys()],
-            'Completed': [tech_stats[t]['completed'] for t in tech_stats.keys()],
-            'Completion Rate %': [f"{tech_stats[t]['completion_rate']:.1f}%" for t in tech_stats.keys()],
-            'Avg Labor Hours': [f"{tech_stats[t]['avg_labor']:.1f}" for t in tech_stats.keys()]
-        }).sort_values('Total WOs', ascending=False)
-        
-        st.dataframe(tech_detail_df, use_container_width=True)
+            st.dataframe(tech_detail_df, use_container_width=True)
+        else:
+            st.info("No technician data available")
     
     with tab5:
         st.subheader("Cost Analysis & Trends")
@@ -781,17 +953,18 @@ def page_enhanced_dashboards():
                 'parts_cost': 'sum',
                 'labor_hours': 'sum'
             }).reset_index()
-            cost_by_system['Labor Cost'] = cost_by_system['labor_hours'] * 50  # Assume $50/hour
+            cost_by_system['Labor Cost'] = cost_by_system['labor_hours'] * 50
             cost_by_system['Total Cost'] = cost_by_system['parts_cost'] + cost_by_system['Labor Cost']
             cost_by_system = cost_by_system.sort_values('Total Cost', ascending=False).head(10)
             
-            cost_chart = alt.Chart(cost_by_system).mark_bar().encode(
-                y=alt.Y("system:N", sort="-x"),
-                x=alt.X("Total Cost:Q"),
-                color=alt.Color("Total Cost:Q", scale=alt.Scale(scheme='reds'))
-            ).properties(height=300)
-            
-            st.altair_chart(cost_chart, use_container_width=True)
+            if len(cost_by_system) > 0:
+                cost_chart = alt.Chart(cost_by_system).mark_bar(color='#DC2626').encode(
+                    y=alt.Y("system:N", sort="-x", title="System"),
+                    x=alt.X("Total Cost:Q", title="Total Cost ($)"),
+                    color=alt.Color("Total Cost:Q", scale=alt.Scale(scheme='reds'))
+                ).properties(height=300)
+                
+                st.altair_chart(cost_chart, use_container_width=True)
         
         with col2:
             st.subheader("Parts vs Labor Cost Breakdown")
@@ -804,16 +977,16 @@ def page_enhanced_dashboards():
                 'Amount': [total_parts, avg_labor_cost]
             })
             
-            breakdown_chart = alt.Chart(breakdown_df).mark_pie().encode(
-                theta=alt.Theta("Amount:Q"),
-                color=alt.Color("Category:N", scale=alt.Scale(scheme='paired'))
-            ).properties(height=300)
-            
-            st.altair_chart(breakdown_chart, use_container_width=True)
+            if len(breakdown_df) > 0:
+                breakdown_chart = alt.Chart(breakdown_df).mark_pie().encode(
+                    theta=alt.Theta("Amount:Q"),
+                    color=alt.Color("Category:N", scale=alt.Scale(domain=['Parts Cost', 'Labor Cost'], range=['#3B82F6', '#10B981']))
+                ).properties(height=300)
+                
+                st.altair_chart(breakdown_chart, use_container_width=True)
         
         st.divider()
         
-        # Cost metrics
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -827,22 +1000,22 @@ def page_enhanced_dashboards():
         
         st.divider()
         
-        # Cost trend
         st.subheader("Cumulative Cost Over Time")
         
-        wos_sorted = wos.sort_values('created_dt')
+        wos_sorted = wos.sort_values('created_dt').copy()
         wos_sorted['Cumulative Cost'] = (wos_sorted['parts_cost'] + (wos_sorted['labor_hours'] * 50)).cumsum()
         
-        cost_trend_chart = alt.Chart(wos_sorted).mark_line(point=True).encode(
-            x=alt.X("created_dt:T", title="Date"),
-            y=alt.Y("Cumulative Cost:Q", title="Cumulative Cost ($)"),
-            tooltip=["created_dt", "Cumulative Cost"]
-        ).properties(height=300).interactive()
-        
-        st.altair_chart(cost_trend_chart, use_container_width=True)
+        if len(wos_sorted) > 0:
+            cost_trend_chart = alt.Chart(wos_sorted).mark_line(point=True, color='#6366F1', size=3).encode(
+                x=alt.X("created_dt:T", title="Date"),
+                y=alt.Y("Cumulative Cost:Q", title="Cumulative Cost ($)"),
+                tooltip=["created_dt", "Cumulative Cost"]
+            ).properties(height=300).interactive()
+            
+            st.altair_chart(cost_trend_chart, use_container_width=True)
 
 # ============================================================================
-# PAGE: WORK ORDERS (Simple version)
+# PAGE: WORK ORDERS
 # ============================================================================
 def page_work_orders():
     """Work Orders page."""
@@ -1032,45 +1205,29 @@ def page_work_orders():
 # ============================================================================
 def page_about():
     """About page."""
-    st.header("ℹ️ About AMIC FRACAS System - Enhanced")
+    st.header("ℹ️ About AMIC FRACAS System - Enhanced (White Theme)")
     
     st.markdown("""
     ### AMIC Work Order Management & FRACAS System
-    **Version 2.5 - Enhanced** ✨
+    **Version 2.5 - Enhanced (White Theme)** ✨
     
-    #### 🎯 What's New
+    #### 🎨 Theme
+    - ✅ Clean white background for professional appearance
+    - ✅ Light gray sidebar for contrast
+    - ✅ High contrast text for readability
+    - ✅ Colorful charts with improved visibility
+    - ✅ Professional button and input styling
+    
+    #### 🎯 Features
     - ✅ Advanced Analytics Dashboard
     - ✅ Executive Summary with KPIs
     - ✅ System Health & Reliability Metrics
     - ✅ Vehicle Health Scoring
     - ✅ Technician Performance Analytics
     - ✅ Cost Analysis & Trends
-    - ✅ MTTR (Mean Time To Repair) Calculations
+    - ✅ MTTR Calculations
     - ✅ Failure Rate Analysis
     - ✅ 30-day Trend Analysis
-    
-    #### 📊 Dashboard Features
-    1. **Executive Summary**: Overall metrics, trends, completion rates
-    2. **System Health**: Top failing systems, reliability scores, failure modes
-    3. **Vehicle Analysis**: Health scoring, active issues per vehicle
-    4. **Technician Performance**: Completion rates, labor hours, productivity
-    5. **Cost Analysis**: Parts vs labor, cost trends, cost by system
-    
-    #### 💡 Key Metrics
-    - **MTTR**: Mean Time To Repair (hours)
-    - **Failure Rate**: Failures per vehicle
-    - **Reliability Score**: System reliability percentage
-    - **Health Score**: Vehicle health 0-100
-    - **Completion Rate**: % of work orders completed
-    - **Total Cost**: Parts + Labor
-    
-    #### 🚀 Quick Features
-    - Real-time dashboard updates
-    - Interactive charts and visualizations
-    - Vehicle health scoring system
-    - Technician performance tracking
-    - Cost analysis with trends
-    - System reliability metrics
     """)
 
 # ============================================================================
@@ -1086,14 +1243,19 @@ def main():
     .header-text {
         font-size: 2.5rem;
         font-weight: bold;
-        color: #1f77b4;
+        color: #1F2937;
         margin-bottom: 0.5rem;
+    }
+    .subtitle-text {
+        font-size: 1.1rem;
+        color: #4B5563;
+        margin-bottom: 2rem;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div class='header-text'>🚗 AMIC FRACAS System v2.5 (Enhanced)</div>", unsafe_allow_html=True)
-    st.markdown("**Advanced Analytics Dashboard for Work Order Management**")
+    st.markdown("<div class='header-text'>🚗 AMIC FRACAS System v2.5 (Enhanced - White Theme)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle-text'>Advanced Analytics Dashboard for Work Order Management</div>", unsafe_allow_html=True)
     
     st.sidebar.title("Navigation")
     
