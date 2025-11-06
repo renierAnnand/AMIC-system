@@ -3938,61 +3938,43 @@ def page_work_orders():
         st.divider()
         st.subheader("Fault Classification (Cascading Dropdowns)")
         
-        # Initialize session state for selections if not exists
-        if 'selected_system' not in st.session_state:
-            st.session_state.selected_system = ""
-        if 'selected_subsystem' not in st.session_state:
-            st.session_state.selected_subsystem = ""
-        if 'selected_component' not in st.session_state:
-            st.session_state.selected_component = ""
-        if 'selected_failure_mode' not in st.session_state:
-            st.session_state.selected_failure_mode = ""
-        
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             systems = [""] + list_systems()
-            system = st.selectbox("System", systems, key="system_select")
-            if system != st.session_state.selected_system:
-                st.session_state.selected_system = system
-                st.session_state.selected_subsystem = ""
-                st.session_state.selected_component = ""
-                st.session_state.selected_failure_mode = ""
+            system = st.selectbox("System", systems, key="system_wo")
         
         with col2:
             subsystems = [""]
             if system:
                 subsystems = [""] + list_subsystems(system)
-            subsystem = st.selectbox("Subsystem", subsystems, key="subsystem_select")
-            if subsystem != st.session_state.selected_subsystem:
-                st.session_state.selected_subsystem = subsystem
-                st.session_state.selected_component = ""
-                st.session_state.selected_failure_mode = ""
+            subsystem = st.selectbox("Subsystem", subsystems, key="subsystem_wo")
         
         with col3:
             components = [""]
             if system and subsystem:
                 components = [""] + list_components(system, subsystem)
-            component = st.selectbox("Component", components, key="component_select")
-            if component != st.session_state.selected_component:
-                st.session_state.selected_component = component
-                st.session_state.selected_failure_mode = ""
+            component = st.selectbox("Component", components, key="component_wo")
         
         with col4:
             failure_modes = [""]
             if system and subsystem and component:
                 failure_modes = [""] + list_failure_modes(system, subsystem, component)
-            failure_mode = st.selectbox("Failure Mode", failure_modes, key="failure_mode_select")
-            if failure_mode != st.session_state.selected_failure_mode:
-                st.session_state.selected_failure_mode = failure_mode
+            failure_mode = st.selectbox("Failure Mode", failure_modes, key="failure_mode_wo")
         
-        # Get codes based on selections
+        st.divider()
+        
+        # Get codes based on current selections
         recommended_action = ""
         failure_code = ""
         cause_code = ""
         resolution_code = ""
         
+        # Show selection summary first
         if system and subsystem and component and failure_mode:
+            st.info(f"📋 **Selection**: {system} → {subsystem} → {component} → {failure_mode}")
+            
+            # Now get the codes
             try:
                 codes = get_codes(system, subsystem, component, failure_mode)
                 recommended_action = codes.get("recommended_action", "")
@@ -4000,26 +3982,27 @@ def page_work_orders():
                 cause_code = codes.get("cause_code", "")
                 resolution_code = codes.get("resolution_code", "")
                 
-                # Debug info (can be removed in production)
-                if not failure_code:
+                # Debug output
+                if failure_code:
+                    st.success(f"✅ Codes retrieved: {failure_code}")
+                else:
                     st.warning(f"⚠️ No codes found for: {system} → {subsystem} → {component} → {failure_mode}")
             except Exception as e:
                 st.error(f"❌ Error retrieving codes: {str(e)}")
         
-        st.divider()
-        
-        # Show selection summary
-        if system and subsystem and component and failure_mode:
-            st.info(f"📋 **Selection**: {system} → {subsystem} → {component} → {failure_mode}")
-        
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input("Failure Code (Auto-filled)", value=failure_code if failure_code else "Select all levels above", disabled=True)
+            fc_display = failure_code if failure_code else "Select all 4 levels above"
+            st.text_input("Failure Code (Auto-filled)", value=fc_display, disabled=True, key="fc_display")
         with col2:
-            st.text_input("Cause Code (Auto-filled)", value=cause_code if cause_code else "Select all levels above", disabled=True)
+            cc_display = cause_code if cause_code else "Select all 4 levels above"
+            st.text_input("Cause Code (Auto-filled)", value=cc_display, disabled=True, key="cc_display")
         
-        st.text_input("Resolution Code (Auto-filled)", value=resolution_code if resolution_code else "Select all levels above", disabled=True)
-        st.text_area("Recommended Action", value=recommended_action if recommended_action else "Select all levels above to see recommended action", disabled=True, height=80)
+        rc_display = resolution_code if resolution_code else "Select all 4 levels above"
+        st.text_input("Resolution Code (Auto-filled)", value=rc_display, disabled=True, key="rc_display")
+        
+        ra_display = recommended_action if recommended_action else "Select all 4 levels above to see recommended action"
+        st.text_area("Recommended Action", value=ra_display, disabled=True, height=80, key="ra_display")
         
         st.divider()
         
