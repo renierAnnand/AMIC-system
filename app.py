@@ -3940,69 +3940,84 @@ def page_work_orders():
         
         col1, col2, col3, col4 = st.columns(4)
         
+        # System dropdown
         with col1:
-            systems = [""] + list_systems()
-            system = st.selectbox("System", systems, key="system_wo")
+            systems_list = [""] + list_systems()
+            system = st.selectbox("System", systems_list, key="wo_system")
         
+        # Subsystem dropdown
         with col2:
-            subsystems = [""]
+            subsystems_list = [""]
             if system:
-                subsystems = [""] + list_subsystems(system)
-            subsystem = st.selectbox("Subsystem", subsystems, key="subsystem_wo")
+                subsystems_list = [""] + list_subsystems(system)
+            subsystem = st.selectbox("Subsystem", subsystems_list, key="wo_subsystem")
         
+        # Component dropdown
         with col3:
-            components = [""]
+            components_list = [""]
             if system and subsystem:
-                components = [""] + list_components(system, subsystem)
-            component = st.selectbox("Component", components, key="component_wo")
+                components_list = [""] + list_components(system, subsystem)
+            component = st.selectbox("Component", components_list, key="wo_component")
         
+        # Failure Mode dropdown
         with col4:
-            failure_modes = [""]
+            failure_modes_list = [""]
             if system and subsystem and component:
-                failure_modes = [""] + list_failure_modes(system, subsystem, component)
-            failure_mode = st.selectbox("Failure Mode", failure_modes, key="failure_mode_wo")
+                failure_modes_list = [""] + list_failure_modes(system, subsystem, component)
+            failure_mode = st.selectbox("Failure Mode", failure_modes_list, key="wo_failure_mode")
         
         st.divider()
         
-        # Get codes based on current selections
-        recommended_action = ""
+        # Initialize variables
         failure_code = ""
         cause_code = ""
         resolution_code = ""
+        recommended_action = ""
         
-        # Show selection summary first
-        if system and subsystem and component and failure_mode:
+        # Check if all selections are made
+        all_selected = bool(system and subsystem and component and failure_mode)
+        
+        # Show selection summary
+        if all_selected:
             st.info(f"📋 **Selection**: {system} → {subsystem} → {component} → {failure_mode}")
             
-            # Now get the codes
+            # Get codes directly from catalogue
             try:
-                codes = get_codes(system, subsystem, component, failure_mode)
-                recommended_action = codes.get("recommended_action", "")
-                failure_code = codes.get("failure_code", "")
-                cause_code = codes.get("cause_code", "")
-                resolution_code = codes.get("resolution_code", "")
+                # Direct dictionary lookup - no function call complexity
+                codes_dict = CATALOGUE_HIERARCHY[system][subsystem][component][failure_mode]
                 
-                # Debug output
+                failure_code = codes_dict.get("failure_code", "")
+                cause_code = codes_dict.get("cause_code", "")
+                resolution_code = codes_dict.get("resolution_code", "")
+                recommended_action = codes_dict.get("recommended_action", "")
+                
+                # Show success if codes found
                 if failure_code:
-                    st.success(f"✅ Codes retrieved: {failure_code}")
+                    st.success(f"✅ **Codes Retrieved**: {failure_code}")
                 else:
-                    st.warning(f"⚠️ No codes found for: {system} → {subsystem} → {component} → {failure_mode}")
+                    st.warning("⚠️ No codes found for this selection")
+                    
+            except KeyError as e:
+                st.error(f"❌ Selection not found in catalogue: {e}")
             except Exception as e:
-                st.error(f"❌ Error retrieving codes: {str(e)}")
+                st.error(f"❌ Error: {e}")
+        else:
+            st.warning("⚠️ Please select all 4 levels (System, Subsystem, Component, Failure Mode)")
         
+        # Display code fields
         col1, col2 = st.columns(2)
         with col1:
-            fc_display = failure_code if failure_code else "Select all 4 levels above"
-            st.text_input("Failure Code (Auto-filled)", value=fc_display, disabled=True, key="fc_display")
+            display_fc = failure_code if failure_code else "← Select all 4 dropdowns above"
+            st.text_input("Failure Code (Auto-filled)", value=display_fc, disabled=True, key="display_fc")
         with col2:
-            cc_display = cause_code if cause_code else "Select all 4 levels above"
-            st.text_input("Cause Code (Auto-filled)", value=cc_display, disabled=True, key="cc_display")
+            display_cc = cause_code if cause_code else "← Select all 4 dropdowns above"
+            st.text_input("Cause Code (Auto-filled)", value=display_cc, disabled=True, key="display_cc")
         
-        rc_display = resolution_code if resolution_code else "Select all 4 levels above"
-        st.text_input("Resolution Code (Auto-filled)", value=rc_display, disabled=True, key="rc_display")
+        display_rc = resolution_code if resolution_code else "← Select all 4 dropdowns above"
+        st.text_input("Resolution Code (Auto-filled)", value=display_rc, disabled=True, key="display_rc")
         
-        ra_display = recommended_action if recommended_action else "Select all 4 levels above to see recommended action"
-        st.text_area("Recommended Action", value=ra_display, disabled=True, height=80, key="ra_display")
+        display_ra = recommended_action if recommended_action else "← Select all 4 dropdowns above"
+        st.text_area("Recommended Action", value=display_ra, disabled=True, height=80, key="display_ra")
         
         st.divider()
         
