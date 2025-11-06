@@ -25,13 +25,90 @@ st.set_page_config(
 # ============================================================================
 st.markdown("""
 <style>
+/* Main backgrounds */
 [data-testid="stAppViewContainer"] { background-color: #FFFFFF; color: #111827; }
 [data-testid="stSidebar"] { background-color: #F9FAFB; }
 [data-testid="stMain"] { background-color: #FFFFFF; }
-.stButton > button { background-color: #3B82F6; color: white; border: none; border-radius: 6px; }
+
+/* Input fields - White background */
+input, textarea, select {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+.stTextInput input,
+.stSelectbox select,
+.stNumberInput input,
+.stDateInput input,
+.stTextArea textarea {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Buttons */
+.stButton > button { 
+    background-color: #3B82F6; 
+    color: white; 
+    border: none; 
+    border-radius: 6px;
+    font-weight: 500;
+}
+
 .stButton > button:hover { background-color: #2563EB; }
+
+/* Headers and text */
 h1, h2, h3 { color: #111827; }
-.stMetric { background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; }
+
+/* Metrics */
+.stMetric { 
+    background-color: #F9FAFB; 
+    border: 1px solid #E5E7EB; 
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Dividers */
+hr { background-color: #E5E7EB; border: none; height: 1px; }
+
+/* Select boxes */
+.stSelectbox > div > div {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Date input */
+.stDateInput > div > div {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+}
+
+/* Number input */
+.stNumberInput > div > div > input {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Text area */
+.stTextArea > div > div > textarea {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Form labels */
+label {
+    color: #111827 !important;
+}
+
+/* Disabled text */
+.stTextInput > div > div > input:disabled {
+    background-color: #F3F4F6 !important;
+    color: #6B7280 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
