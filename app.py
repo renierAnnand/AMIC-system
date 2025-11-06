@@ -465,11 +465,19 @@ def calculate_metrics(wos):
 def page_dashboards():
     st.header("📊 Advanced Analytics Dashboard")
     
-    wos = get_work_orders()
+    try:
+        wos = get_work_orders()
+    except Exception as e:
+        st.error(f"Error loading work orders: {str(e)}")
+        st.info("Showing cached data if available...")
+        wos = pd.DataFrame()
     
-    if len(wos) == 0:
-        st.warning("No work orders available")
+    if wos is None or len(wos) == 0:
+        st.warning("⚠️ No work order data available")
+        st.info("Please ensure the database is initialized properly.")
         return
+    
+    st.success(f"✅ Loaded {len(wos)} work orders")
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📈 Executive Summary",
@@ -856,34 +864,47 @@ def page_about():
 # MAIN
 # ============================================================================
 def main():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return
     
     st.markdown("""
     <style>
-    .header { font-size: 2.5rem; font-weight: bold; color: #1F2937; }
-    .subtitle { font-size: 1.1rem; color: #4B5563; }
+    .header { font-size: 2.5rem; font-weight: bold; color: #1F2937; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.1rem; color: #4B5563; margin-bottom: 2rem; }
     </style>
     """, unsafe_allow_html=True)
     
     st.markdown("<div class='header'>🚗 AMIC FRACAS System v2.5</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Advanced Analytics Dashboard for Work Order Management</div>", unsafe_allow_html=True)
     
-    st.sidebar.title("Navigation")
+    st.sidebar.title("📋 Navigation")
     
-    engine = get_engine()
-    with engine.connect() as conn:
-        wo_count = conn.execute(text("SELECT COUNT(*) FROM work_orders")).scalar()
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            wo_count = conn.execute(text("SELECT COUNT(*) FROM work_orders")).scalar()
+        st.sidebar.success(f"✅ System Ready\n📦 {wo_count} Work Orders\n📊 Analytics Active")
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ {str(e)[:50]}")
     
-    st.sidebar.success(f"✅ System Ready\n📦 {wo_count} Work Orders\n📊 Analytics Active")
+    page = st.sidebar.radio("Select Page", ["📈 Enhanced Dashboards", "📋 Work Orders", "ℹ️ About"], index=0)
     
-    page = st.sidebar.radio("Select Page", ["Enhanced Dashboards", "Work Orders", "About"])
+    st.sidebar.divider()
+    st.sidebar.markdown("**v2.5 Production**")
     
-    if page == "Enhanced Dashboards":
-        page_dashboards()
-    elif page == "Work Orders":
-        page_work_orders()
-    elif page == "About":
-        page_about()
+    try:
+        if "Enhanced Dashboards" in page:
+            page_dashboards()
+        elif "Work Orders" in page:
+            page_work_orders()
+        elif "About" in page:
+            page_about()
+    except Exception as e:
+        st.error(f"Error loading page: {str(e)}")
+        st.info("Try refreshing the page (F5) or selecting a different tab")
 
 if __name__ == "__main__":
     main()
