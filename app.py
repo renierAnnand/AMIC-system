@@ -3968,12 +3968,6 @@ def page_work_orders():
         
         st.divider()
         
-        # Initialize variables
-        failure_code = ""
-        cause_code = ""
-        resolution_code = ""
-        recommended_action = ""
-        
         # Check if all selections are made
         all_selected = bool(system and subsystem and component and failure_mode)
         
@@ -3981,9 +3975,8 @@ def page_work_orders():
         if all_selected:
             st.info(f"📋 **Selection**: {system} → {subsystem} → {component} → {failure_mode}")
             
-            # Get codes directly from catalogue
+            # Get codes directly
             try:
-                # Direct dictionary lookup - no function call complexity
                 codes_dict = CATALOGUE_HIERARCHY[system][subsystem][component][failure_mode]
                 
                 failure_code = codes_dict.get("failure_code", "")
@@ -3991,33 +3984,40 @@ def page_work_orders():
                 resolution_code = codes_dict.get("resolution_code", "")
                 recommended_action = codes_dict.get("recommended_action", "")
                 
-                # Show success if codes found
                 if failure_code:
                     st.success(f"✅ **Codes Retrieved**: {failure_code}")
-                else:
-                    st.warning("⚠️ No codes found for this selection")
                     
-            except KeyError as e:
-                st.error(f"❌ Selection not found in catalogue: {e}")
+                    # DEBUG: Show the actual values
+                    st.write(f"**DEBUG - Values retrieved:**")
+                    st.write(f"- Failure Code: `{failure_code}`")
+                    st.write(f"- Cause Code: `{cause_code}`")
+                    st.write(f"- Resolution Code: `{resolution_code}`")
+                    st.write(f"- Action: `{recommended_action}`")
+                    
+                    st.divider()
+                    
+                    # USE MARKDOWN INSTEAD OF TEXT INPUT TO DISPLAY
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Failure Code (Auto-filled)**")
+                        st.code(failure_code, language=None)
+                    with col2:
+                        st.markdown("**Cause Code (Auto-filled)**")
+                        st.code(cause_code, language=None)
+                    
+                    st.markdown("**Resolution Code (Auto-filled)**")
+                    st.code(resolution_code, language=None)
+                    
+                    st.markdown("**Recommended Action**")
+                    st.info(recommended_action)
+                    
+                else:
+                    st.warning("⚠️ No codes found")
+                    
             except Exception as e:
                 st.error(f"❌ Error: {e}")
         else:
             st.warning("⚠️ Please select all 4 levels (System, Subsystem, Component, Failure Mode)")
-        
-        # Display code fields
-        col1, col2 = st.columns(2)
-        with col1:
-            display_fc = failure_code if failure_code else "← Select all 4 dropdowns above"
-            st.text_input("Failure Code (Auto-filled)", value=display_fc, disabled=True, key="display_fc")
-        with col2:
-            display_cc = cause_code if cause_code else "← Select all 4 dropdowns above"
-            st.text_input("Cause Code (Auto-filled)", value=display_cc, disabled=True, key="display_cc")
-        
-        display_rc = resolution_code if resolution_code else "← Select all 4 dropdowns above"
-        st.text_input("Resolution Code (Auto-filled)", value=display_rc, disabled=True, key="display_rc")
-        
-        display_ra = recommended_action if recommended_action else "← Select all 4 dropdowns above"
-        st.text_area("Recommended Action", value=display_ra, disabled=True, height=80, key="display_ra")
         
         st.divider()
         
