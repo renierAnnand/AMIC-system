@@ -37,34 +37,127 @@ if "db_engine" not in st.session_state:
     st.session_state.db_engine = None
 
 # ============================================================================
-# STYLING - WHITE THEME
+# STYLING - WHITE THEME (ENHANCED)
 # ============================================================================
 st.markdown("""
 <style>
+/* Main background - WHITE */
 [data-testid="stAppViewContainer"] {
-    background-color: #FFFFFF;
-    color: #111827;
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
 }
+
+[data-testid="stMain"] {
+    background-color: #FFFFFF !important;
+}
+
+/* Sidebar - Light Gray */
 [data-testid="stSidebar"] {
-    background-color: #F9FAFB;
+    background-color: #F9FAFB !important;
+    color: #111827 !important;
 }
+
+/* Text and headers */
+h1, h2, h3, h4, h5, h6, p, span, div, label {
+    color: #111827 !important;
+}
+
+/* Input fields - WHITE background with dark text */
+.stTextInput > div > div > input,
+.stSelectbox > div > div,
+.stNumberInput > div > div > input,
+.stDateInput > div > div > input,
+.stTextArea > div > div > textarea {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #D1D5DB !important;
+}
+
+/* Dropdown options */
+[data-baseweb="select"] {
+    background-color: #FFFFFF !important;
+}
+
+/* Buttons */
 .stButton > button {
-    background-color: #3B82F6;
-    color: white;
+    background-color: #3B82F6 !important;
+    color: white !important;
     border-radius: 6px;
     font-weight: 500;
+    border: none;
 }
+
 .stButton > button:hover {
-    background-color: #2563EB;
+    background-color: #2563EB !important;
 }
+
+/* Form submit button */
+[data-testid="stFormSubmitButton"] > button {
+    background-color: #DC2626 !important;
+    color: white !important;
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Metrics */
 .stMetric {
-    background-color: #F9FAFB;
+    background-color: #F9FAFB !important;
     border: 1px solid #E5E7EB;
     border-radius: 8px;
     padding: 1.5rem;
 }
-h1, h2, h3 {
-    color: #111827;
+
+/* Info boxes */
+.stInfo {
+    background-color: #DBEAFE !important;
+    color: #1E40AF !important;
+    border: 1px solid #BFDBFE !important;
+}
+
+.stSuccess {
+    background-color: #D1FAE5 !important;
+    color: #065F46 !important;
+}
+
+.stWarning {
+    background-color: #FEF3C7 !important;
+    color: #78350F !important;
+}
+
+/* Dataframe/tables */
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
+}
+
+/* Expander */
+[data-testid="stExpander"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E5E7EB;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: #F3F4F6 !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #4B5563 !important;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #3B82F6 !important;
+}
+
+/* Force white backgrounds on all containers */
+.main .block-container {
+    background-color: #FFFFFF !important;
+}
+
+/* Markdown containers */
+[data-testid="stMarkdownContainer"] {
+    color: #111827 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -781,41 +874,61 @@ def render_new_work_order():
     
     with st.form("new_wo_form", clear_on_submit=True):
         # Basic Info
-        st.subheader("Basic Information")
-        col1, col2 = st.columns(2)
+        st.subheader("📋 Basic Information")
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            vehicle_id = st.text_input("Vehicle ID *", placeholder="VEH-0001")
-            failure_date = st.date_input("Failure Date *", datetime.now())
+            vehicle_id = st.text_input("🚗 Vehicle ID *", placeholder="VEH-0001", help="Enter the vehicle identification number")
         
         with col2:
-            priority = st.selectbox("Priority *", ["Low", "Medium", "High", "Critical"], index=2)
-            status = st.selectbox("Status *", ["Open", "In Progress"], index=0)
+            failure_date = st.date_input("📅 Failure Date *", datetime.now(), help="When did the failure occur?")
+        
+        with col3:
+            priority = st.selectbox("⚠️ Priority *", ["Low", "Medium", "High", "Critical"], index=2, help="Select priority level")
+        
+        status = st.selectbox("📊 Status *", ["Open", "In Progress"], index=0, help="Current work order status")
         
         # Cascading Dropdowns
-        st.subheader("Fault Classification")
-        st.caption("Select System → Subsystem → Component → Failure Mode")
+        st.markdown("---")
+        st.subheader("🔧 Fault Classification")
+        st.caption("Select System → Subsystem → Component → Failure Mode (each selection filters the next)")
+        st.markdown("")  # Spacing
         
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             systems = get_systems()
-            selected_system = st.selectbox("System *", systems, key="system_select")
+            selected_system = st.selectbox("🏗️ System *", systems, key="system_select", help="Select the vehicle system")
         
         with col2:
             subsystems = get_subsystems(selected_system) if selected_system else []
-            selected_subsystem = st.selectbox("Subsystem *", subsystems if subsystems else ["Select System first"], 
-                                             disabled=not subsystems, key="subsystem_select")
+            selected_subsystem = st.selectbox(
+                "⚙️ Subsystem *", 
+                subsystems if subsystems else ["← Select System first"], 
+                disabled=not subsystems, 
+                key="subsystem_select",
+                help="Select the subsystem"
+            )
         
         with col3:
             components = get_components(selected_system, selected_subsystem) if selected_system and selected_subsystem else []
-            selected_component = st.selectbox("Component *", components if components else ["Select Subsystem first"],
-                                             disabled=not components, key="component_select")
+            selected_component = st.selectbox(
+                "🔩 Component *", 
+                components if components else ["← Select Subsystem first"],
+                disabled=not components, 
+                key="component_select",
+                help="Select the component"
+            )
         
         with col4:
             failure_modes = get_failure_modes(selected_system, selected_subsystem, selected_component) if selected_component else []
-            selected_failure = st.selectbox("Failure Mode *", failure_modes if failure_modes else ["Select Component first"],
-                                           disabled=not failure_modes, key="failure_select")
+            selected_failure = st.selectbox(
+                "❌ Failure Mode *", 
+                failure_modes if failure_modes else ["← Select Component first"],
+                disabled=not failure_modes, 
+                key="failure_select",
+                help="Select the specific failure mode"
+            )
         
         # Get fault details
         fault_details = None
@@ -824,37 +937,51 @@ def render_new_work_order():
         
         # Auto-populated fields
         if fault_details:
-            st.subheader("Auto-Generated Codes")
+            st.markdown("---")
+            st.subheader("✨ Auto-Generated Codes")
+            st.success("📌 Codes automatically generated from catalogue!")
+            
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.text_input("Failure Code", value=fault_details.get('failure_code', ''), disabled=True)
+                st.text_input("🔢 Failure Code", value=fault_details.get('failure_code', ''), disabled=True, 
+                             help="Automatically generated from catalogue")
             with col2:
-                st.text_input("Cause Code", value=fault_details.get('cause_code', ''), disabled=True)
+                st.text_input("🔍 Cause Code", value=fault_details.get('cause_code', ''), disabled=True,
+                             help="Root cause classification code")
             with col3:
-                st.text_input("Resolution Code", value=fault_details.get('resolution_code', ''), disabled=True)
+                st.text_input("✅ Resolution Code", value=fault_details.get('resolution_code', ''), disabled=True,
+                             help="Standard resolution procedure code")
             
-            st.text_area("Recommended Action", value=fault_details.get('recommended_action', ''), 
-                        height=100, disabled=True)
+            st.markdown("**📝 Recommended Action:**")
+            st.info(fault_details.get('recommended_action', 'No action specified'))
         
         # Additional Details
-        st.subheader("Additional Details")
-        description = st.text_area("Description", placeholder="Describe the failure in detail...")
+        st.markdown("---")
+        st.subheader("📄 Additional Details")
+        description = st.text_area("Description", placeholder="Describe the failure in detail...", height=100,
+                                   help="Provide detailed information about the failure")
         
         col1, col2 = st.columns(2)
         with col1:
-            labor_hours = st.number_input("Estimated Labor Hours", min_value=0.0, step=0.5, value=2.0)
+            labor_hours = st.number_input("⏱️ Estimated Labor Hours", min_value=0.0, step=0.5, value=2.0,
+                                         help="Estimated time to complete repair")
         with col2:
-            parts_cost = st.number_input("Estimated Parts Cost ($)", min_value=0.0, step=50.0, value=500.0)
+            parts_cost = st.number_input("💰 Estimated Parts Cost ($)", min_value=0.0, step=50.0, value=500.0,
+                                        help="Estimated cost of replacement parts")
+        
+        st.markdown("")  # Spacing
         
         # Submit
-        submitted = st.form_submit_button("🚀 Create Work Order", use_container_width=True, type="primary")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            submitted = st.form_submit_button("🚀 Create Work Order", use_container_width=True, type="primary")
         
         if submitted:
             # Validation
             if not vehicle_id:
                 st.error("❌ Vehicle ID is required")
             elif not selected_system or not selected_subsystem or not selected_component or not selected_failure:
-                st.error("❌ Please complete all fault classification fields")
+                st.error("❌ Please complete all fault classification fields (System → Subsystem → Component → Failure Mode)")
             elif not fault_details:
                 st.error("❌ Invalid fault classification selection")
             else:
@@ -887,27 +1014,48 @@ def render_new_work_order():
                 
                 # Save to database
                 if save_work_order(wo_data):
-                    st.success(f"✅ Work Order {wo_id} created successfully!")
+                    st.success(f"✅ Work Order **{wo_id}** created successfully!")
                     st.balloons()
                     
                     # Show summary
                     with st.expander("📋 Work Order Summary", expanded=True):
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.write(f"**Work Order ID:** {wo_id}")
-                            st.write(f"**Vehicle:** {vehicle_id}")
-                            st.write(f"**System:** {selected_system}")
-                            st.write(f"**Subsystem:** {selected_subsystem}")
-                            st.write(f"**Component:** {selected_component}")
+                            st.markdown(f"**Work Order ID:** `{wo_id}`")
+                            st.markdown(f"**Vehicle:** {vehicle_id}")
+                            st.markdown(f"**System:** {selected_system}")
+                            st.markdown(f"**Subsystem:** {selected_subsystem}")
+                            st.markdown(f"**Component:** {selected_component}")
+                            st.markdown(f"**Failure Mode:** {selected_failure}")
                         with col2:
-                            st.write(f"**Failure Mode:** {selected_failure}")
-                            st.write(f"**Failure Code:** {fault_details.get('failure_code', '')}")
-                            st.write(f"**Priority:** {priority}")
-                            st.write(f"**Status:** {status}")
-                            st.write(f"**Est. Labor:** {labor_hours} hrs")
-                            st.write(f"**Est. Parts:** ${parts_cost:,.2f}")
+                            st.markdown(f"**Failure Code:** `{fault_details.get('failure_code', '')}`")
+                            st.markdown(f"**Cause Code:** `{fault_details.get('cause_code', '')}`")
+                            st.markdown(f"**Resolution Code:** `{fault_details.get('resolution_code', '')}`")
+                            st.markdown(f"**Priority:** {priority}")
+                            st.markdown(f"**Status:** {status}")
+                            st.markdown(f"**Est. Cost:** ${parts_cost + (labor_hours * 85):,.2f}")
+                        
+                        st.markdown("---")
+                        st.markdown("**📝 Recommended Action:**")
+                        st.info(fault_details.get('recommended_action', 'N/A'))
                 else:
                     st.error("❌ Failed to create work order")
+    
+    # Help section after form
+    with st.expander("ℹ️ Need Help?"):
+        st.markdown("""
+        **How to create a work order:**
+        1. Enter the vehicle ID and select priority/status
+        2. Use the cascading dropdowns to select the fault (they filter automatically)
+        3. Review the auto-generated codes and recommended action
+        4. Add a description and cost estimates
+        5. Click 'Create Work Order'
+        
+        **Tips:**
+        - Each dropdown filters the next one
+        - Fault codes are automatically generated
+        - All fields marked with * are required
+        """)
 
 def render_analytics():
     """Render advanced analytics"""
