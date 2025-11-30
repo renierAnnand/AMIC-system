@@ -154,21 +154,30 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
 def load_failure_catalogue_from_excel():
     """Load the complete 427-entry failure catalogue from Excel"""
     try:
-        df = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
-                          sheet_name='FRACAS_FailureMode_Catalogue')
+        file_path = '/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx'
+        df = pd.read_excel(file_path, sheet_name='FRACAS_FailureMode_Catalogue')
+        
+        # Clean up column names and data
+        df.columns = df.columns.str.strip()
+        
+        # Handle any NaN values in codes
+        df['Failure Code'] = df['Failure Code'].fillna('UNKNOWN')
+        df['Cause Code'] = df['Cause Code'].fillna('UNKNOWN')
+        df['Resolution Code'] = df['Resolution Code'].fillna('UNKNOWN')
+        
+        print(f"✓ Loaded {len(df)} failure modes from Excel")
+        print(f"✓ Systems: {df['System'].nunique()}")
+        print(f"✓ Subsystems: {df['Subsystem'].nunique()}")
+        print(f"✓ Components: {df['Component'].nunique()}")
+        
         return df
-    except:
-        # Fallback sample data if Excel not available
-        return pd.DataFrame({
-            'System': ['HVAC', 'Engine', 'Brakes'],
-            'Subsystem': ['Air Conditioning', 'Fuel System', 'Hydraulic'],
-            'Component': ['Compressor', 'Fuel Pump', 'Master Cylinder'],
-            'Failure Mode': ['Mechanical seizure', 'Pump failure', 'Internal leak'],
-            'Recommended Action': ['Replace compressor', 'Replace fuel pump', 'Replace master cylinder'],
-            'Failure Code': ['HVAC-AC-001', 'ENG-FUEL-001', 'BRK-HYD-001'],
-            'Cause Code': ['HVAC-AC-C001', 'ENG-FUEL-C001', 'BRK-HYD-C001'],
-            'Resolution Code': ['HVAC-AC-R001', 'ENG-FUEL-R001', 'BRK-HYD-R001']
-        })
+    except Exception as e:
+        print(f"Error loading Excel: {e}")
+        # Return empty dataframe with correct structure if file can't be loaded
+        return pd.DataFrame(columns=[
+            'System', 'Subsystem', 'Component', 'Failure Mode', 
+            'Recommended Action', 'Failure Code', 'Cause Code', 'Resolution Code'
+        ])
 
 def generate_bom_for_failure(failure_code, failure_mode, component, recommended_action):
     """Generate Bill of Materials based on failure mode"""
@@ -300,6 +309,14 @@ def init_data():
     # Load complete failure catalogue from Excel
     st.session_state.df_failure_catalogue = load_failure_catalogue_from_excel()
     
+    # Show loading info
+    if len(st.session_state.df_failure_catalogue) > 0:
+        print(f"✅ Catalogue loaded successfully!")
+        print(f"   - Total entries: {len(st.session_state.df_failure_catalogue)}")
+        print(f"   - Sample systems: {st.session_state.df_failure_catalogue['System'].unique()[:5].tolist()}")
+    else:
+        print("⚠️ Warning: Catalogue is empty!")
+    
     # Reference tables
     st.session_state.df_region = pd.DataFrame({
         'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
@@ -388,7 +405,17 @@ def get_failure_details(system, subsystem, component, failure_mode):
     ]
     
     if not result.empty:
-        return result.iloc[0].to_dict()
+        row = result.iloc[0]
+        return {
+            'System': row['System'],
+            'Subsystem': row['Subsystem'],
+            'Component': row['Component'],
+            'Failure Mode': row['Failure Mode'],
+            'Recommended Action': row['Recommended Action'],
+            'Failure Code': row['Failure Code'],
+            'Cause Code': row['Cause Code'],
+            'Resolution Code': row['Resolution Code']
+        }
     return None
 
 # ============================================================================
@@ -399,6 +426,15 @@ def role_selection_page():
     """Role selection for demo"""
     st.title("🔧 AMIC MMS - Enhanced Demo")
     st.markdown("### Select Your Role")
+    
+    # Show catalogue loading status
+    try:
+        df_test = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
+                               sheet_name='FRACAS_FailureMode_Catalogue')
+        st.success(f"✅ Excel File Found: {len(df_test)} failure modes ready to load")
+    except Exception as e:
+        st.error(f"⚠️ Could not read Excel file: {e}")
+    
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -443,6 +479,14 @@ def change_role():
 def page_create_work_order():
     """Create work order with BOM generation"""
     st.title("➕ Create Work Order with BOM")
+    
+    # Show catalogue status
+    catalogue = st.session_state.df_failure_catalogue
+    if len(catalogue) == 0:
+        st.error("⚠️ Failure catalogue is empty! Please check Excel file.")
+        return
+    
+    st.success(f"✅ Failure Catalogue Loaded: {len(catalogue)} entries | {catalogue['System'].nunique()} systems | {catalogue['Subsystem'].nunique()} subsystems | {catalogue['Component'].nunique()} components")
     
     user = st.session_state.current_user
     
