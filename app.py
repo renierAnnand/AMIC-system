@@ -312,8 +312,8 @@ def init_data():
     
     st.session_state.df_vehicle = pd.DataFrame({
         'Vehicle_Number': [f'VEH-{i:03d}' for i in range(1, 21)],
-        'Vehicle_Type': ['MRAP', 'APC', 'Transport'] * 7 + ['MRAP'],
-        'Unit_Name': ['Unit 101'] * 5 + ['Unit 102'] * 5 + ['Unit 103'] * 5 + ['Unit 104'] * 5
+        'Vehicle_Type': (['MRAP', 'APC', 'Transport'] * 6 + ['MRAP', 'APC'])[:20],
+        'Unit_Name': (['Unit 101'] * 5 + ['Unit 102'] * 5 + ['Unit 103'] * 5 + ['Unit 104'] * 5)[:20]
     })
     
     # Users
