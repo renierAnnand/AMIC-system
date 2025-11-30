@@ -11,12 +11,19 @@ import numpy as np
 from datetime import datetime, timedelta
 import hashlib
 import sys
-sys.path.insert(0, '/mnt/user-data/outputs')
+import os
 
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Try to import the catalogue data
 try:
     from failure_catalogue_data import get_catalogue_dataframe
     CATALOGUE_AVAILABLE = True
-except:
+except ImportError as e:
+    print(f"Import error: {e}")
     CATALOGUE_AVAILABLE = False
 
 # ============================================================================
@@ -164,13 +171,19 @@ def load_failure_catalogue_from_excel():
     if CATALOGUE_AVAILABLE:
         try:
             df = get_catalogue_dataframe()
-            print(f"✓ Loaded {len(df)} failure modes from embedded data")
-            print(f"✓ Systems: {df['System'].nunique()}")
-            print(f"✓ Subsystems: {df['Subsystem'].nunique()}")
-            print(f"✓ Components: {df['Component'].nunique()}")
-            return df
+            if len(df) > 0:
+                st.session_state.catalogue_load_message = f"✓ Loaded {len(df)} failure modes"
+                return df
+            else:
+                st.session_state.catalogue_load_message = "⚠️ Catalogue loaded but empty"
+                return pd.DataFrame(columns=[
+                    'System', 'Subsystem', 'Component', 'Failure Mode', 
+                    'Recommended Action', 'Failure Code', 'Cause Code', 'Resolution Code'
+                ])
         except Exception as e:
-            print(f"Error loading embedded data: {e}")
+            st.session_state.catalogue_load_message = f"❌ Error loading catalogue: {str(e)}"
+    else:
+        st.session_state.catalogue_load_message = "❌ Catalogue module not available - check if failure_catalogue_data.py is uploaded"
     
     # Return empty dataframe if loading fails
     return pd.DataFrame(columns=[
@@ -426,23 +439,34 @@ def role_selection_page():
     st.title("🔧 AMIC MMS - Enhanced Demo")
     st.markdown("### Select Your Role")
     
-    # Show catalogue loading status
+    # Show catalogue loading status with diagnostics
     if CATALOGUE_AVAILABLE:
         try:
             df_test = get_catalogue_dataframe()
-            st.success(f"✅ Failure Catalogue Loaded: {len(df_test)} failure modes ready")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Systems", df_test['System'].nunique())
-            with col2:
-                st.metric("Subsystems", df_test['Subsystem'].nunique())
-            with col3:
-                st.metric("Components", df_test['Component'].nunique())
+            if len(df_test) > 0:
+                st.success(f"✅ Failure Catalogue Loaded: {len(df_test)} failure modes ready")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Systems", df_test['System'].nunique())
+                with col2:
+                    st.metric("Subsystems", df_test['Subsystem'].nunique())
+                with col3:
+                    st.metric("Components", df_test['Component'].nunique())
+            else:
+                st.error("⚠️ Catalogue loaded but contains no data")
         except Exception as e:
-            st.error(f"⚠️ Could not load catalogue: {e}")
+            st.error(f"⚠️ Error loading catalogue: {str(e)}")
     else:
-        st.error("⚠️ Failure catalogue not available")
+        st.error("""
+        ⚠️ **Failure Catalogue Not Available**
+        
+        Please ensure both files are uploaded:
+        1. amic_mms_enhanced.py
+        2. failure_catalogue_data.py
+        
+        Both files must be in the same directory.
+        """)
     
     st.markdown("---")
     
@@ -491,11 +515,29 @@ def page_create_work_order():
     
     # Show catalogue status
     catalogue = st.session_state.df_failure_catalogue
+    
+    if 'catalogue_load_message' in st.session_state:
+        if '✓' in st.session_state.catalogue_load_message:
+            st.success(st.session_state.catalogue_load_message)
+        else:
+            st.error(st.session_state.catalogue_load_message)
+    
     if len(catalogue) == 0:
-        st.error("⚠️ Failure catalogue is empty! Please check Excel file.")
+        st.error("""
+        ⚠️ **Failure catalogue is empty!** 
+        
+        **Troubleshooting:**
+        1. Ensure both files are uploaded to Streamlit Cloud:
+           - amic_mms_enhanced.py
+           - failure_catalogue_data.py
+        2. Both files must be in the same directory
+        3. Try redeploying the app
+        
+        If the problem persists, download both files again from the outputs folder.
+        """)
         return
     
-    st.success(f"✅ Failure Catalogue Loaded: {len(catalogue)} entries | {catalogue['System'].nunique()} systems | {catalogue['Subsystem'].nunique()} subsystems | {catalogue['Component'].nunique()} components")
+    st.success(f"✅ Catalogue Ready: {len(catalogue)} entries | {catalogue['System'].nunique()} systems | {catalogue['Subsystem'].nunique()} subsystems | {catalogue['Component'].nunique()} components")
     
     user = st.session_state.current_user
     
