@@ -1,43 +1,26 @@
 """
-AMIC FRACAS System - ENHANCED DEMO VERSION
-✅ Full cascading dropdowns with detailed catalogue
-✅ Automatic code generation
-✅ Complete dashboards and analytics
-✅ Ready for professional demonstration
+AMIC Maintenance Management System (MMS) - Phase 1 Work Order Module
+Complete Demo Application with Full ERD Implementation
 """
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import sqlite3
-from sqlalchemy import create_engine, text
-from sqlalchemy.pool import StaticPool
-import altair as alt
-import json
-import random
+import hashlib
 
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="AMIC FRACAS System - Demo Enhanced",
-    page_icon="🚗",
+    page_title="AMIC MMS - Work Order Management",
+    page_icon="🔧",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================================================
-# SESSION STATE
-# ============================================================================
-if "app_initialized" not in st.session_state:
-    st.session_state.app_initialized = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = "tech_001"
-if "db_engine" not in st.session_state:
-    st.session_state.db_engine = None
-
-# ============================================================================
-# STYLING - WHITE THEME (ENHANCED)
+# STYLING - WHITE THEME
 # ============================================================================
 st.markdown("""
 <style>
@@ -73,11 +56,6 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
     border: 1px solid #D1D5DB !important;
 }
 
-/* Dropdown options */
-[data-baseweb="select"] {
-    background-color: #FFFFFF !important;
-}
-
 /* Buttons */
 .stButton > button {
     background-color: #3B82F6 !important;
@@ -91,22 +69,17 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
     background-color: #2563EB !important;
 }
 
-/* Form submit button */
-[data-testid="stFormSubmitButton"] > button {
-    background-color: #DC2626 !important;
-    color: white !important;
-    width: 100%;
-    padding: 0.75rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-}
-
 /* Metrics */
 .stMetric {
     background-color: #F9FAFB !important;
     border: 1px solid #E5E7EB;
     border-radius: 8px;
     padding: 1.5rem;
+}
+
+/* Dataframe/tables */
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
 }
 
 /* Info boxes */
@@ -125,1172 +98,1178 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
     background-color: #FEF3C7 !important;
     color: #78350F !important;
 }
-
-/* Dataframe/tables */
-[data-testid="stDataFrame"] {
-    background-color: #FFFFFF !important;
-}
-
-/* Expander */
-[data-testid="stExpander"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #E5E7EB;
-}
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-    background-color: #F3F4F6 !important;
-}
-
-.stTabs [data-baseweb="tab"] {
-    color: #4B5563 !important;
-}
-
-.stTabs [aria-selected="true"] {
-    color: #3B82F6 !important;
-}
-
-/* Force white backgrounds on all containers */
-.main .block-container {
-    background-color: #FFFFFF !important;
-}
-
-/* Markdown containers */
-[data-testid="stMarkdownContainer"] {
-    color: #111827 !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# ENHANCED CATALOGUE HIERARCHY - DETAILED STRUCTURE
-# This is a subset showing the pattern - expandable to all 427 entries
-# ============================================================================
-CATALOGUE_HIERARCHY = {
-    "HVAC": {
-        "Air Conditioning": {
-            "Compressor": {
-                "Mechanical seizure": {
-                    "failure_code": "HVAC-AC-001",
-                    "cause_code": "HVAC-AC-C001",
-                    "resolution_code": "HVAC-AC-R001",
-                    "recommended_action": "Replace compressor; Replace clutch; Flush circuit; Replace filter/drier; Vacuum & recharge"
-                },
-                "Shaft seal leak": {
-                    "failure_code": "HVAC-AC-002",
-                    "cause_code": "HVAC-AC-C002",
-                    "resolution_code": "HVAC-AC-R002",
-                    "recommended_action": "Replace shaft seal; Check refrigerant level; Pressure test system"
-                },
-                "Clutch failure": {
-                    "failure_code": "HVAC-AC-003",
-                    "cause_code": "HVAC-AC-C003",
-                    "resolution_code": "HVAC-AC-R003",
-                    "recommended_action": "Replace clutch assembly; Check electrical connections; Test operation"
-                }
-            },
-            "Condenser": {
-                "Leak at tubes": {
-                    "failure_code": "HVAC-AC-010",
-                    "cause_code": "HVAC-AC-C010",
-                    "resolution_code": "HVAC-AC-R010",
-                    "recommended_action": "Replace condenser; Clean fins; Leak test; Vacuum & recharge"
-                },
-                "Fin blockage": {
-                    "failure_code": "HVAC-AC-011",
-                    "cause_code": "HVAC-AC-C011",
-                    "resolution_code": "HVAC-AC-R011",
-                    "recommended_action": "Clean condenser fins; Check airflow; Verify fan operation"
-                }
-            },
-            "Blower Motor": {
-                "Motor burnt": {
-                    "failure_code": "HVAC-AC-020",
-                    "cause_code": "HVAC-AC-C020",
-                    "resolution_code": "HVAC-AC-R020",
-                    "recommended_action": "Replace blower motor; Inspect resistor; Verify airflow"
-                },
-                "Bearing noise": {
-                    "failure_code": "HVAC-AC-021",
-                    "cause_code": "HVAC-AC-C021",
-                    "resolution_code": "HVAC-AC-R021",
-                    "recommended_action": "Replace blower motor; Lubricate bearings; Check mounting"
-                }
-            }
-        },
-        "Heating": {
-            "Heater Core": {
-                "Core leak": {
-                    "failure_code": "HVAC-HT-001",
-                    "cause_code": "HVAC-HT-C001",
-                    "resolution_code": "HVAC-HT-R001",
-                    "recommended_action": "Replace heater core; Flush circuit; Bleed system"
-                },
-                "Blockage": {
-                    "failure_code": "HVAC-HT-002",
-                    "cause_code": "HVAC-HT-C002",
-                    "resolution_code": "HVAC-HT-R002",
-                    "recommended_action": "Flush heater core; Check coolant flow; Replace if needed"
-                }
-            }
-        }
-    },
-    "Engine": {
-        "Fuel System": {
-            "Fuel Pump": {
-                "Pump failure": {
-                    "failure_code": "ENG-FUEL-001",
-                    "cause_code": "ENG-FUEL-C001",
-                    "resolution_code": "ENG-FUEL-R001",
-                    "recommended_action": "Replace fuel pump; Check electrical; Verify fuel quality"
-                },
-                "Low pressure": {
-                    "failure_code": "ENG-FUEL-002",
-                    "cause_code": "ENG-FUEL-C002",
-                    "resolution_code": "ENG-FUEL-R002",
-                    "recommended_action": "Replace pump; Check filter; Test pressure"
-                }
-            },
-            "Fuel Injectors": {
-                "Injector clogged": {
-                    "failure_code": "ENG-FUEL-010",
-                    "cause_code": "ENG-FUEL-C010",
-                    "resolution_code": "ENG-FUEL-R010",
-                    "recommended_action": "Clean injectors; Replace if needed; Check fuel quality"
-                },
-                "Injector leak": {
-                    "failure_code": "ENG-FUEL-011",
-                    "cause_code": "ENG-FUEL-C011",
-                    "resolution_code": "ENG-FUEL-R011",
-                    "recommended_action": "Replace injector; Replace seals; Test spray pattern"
-                }
-            }
-        },
-        "Ignition": {
-            "Spark Plugs": {
-                "Fouled plugs": {
-                    "failure_code": "ENG-IGN-001",
-                    "cause_code": "ENG-IGN-C001",
-                    "resolution_code": "ENG-IGN-R001",
-                    "recommended_action": "Replace spark plugs; Check gap; Verify ignition timing"
-                },
-                "Worn electrodes": {
-                    "failure_code": "ENG-IGN-002",
-                    "cause_code": "ENG-IGN-C002",
-                    "resolution_code": "ENG-IGN-R002",
-                    "recommended_action": "Replace spark plugs; Adjust gap to spec"
-                }
-            },
-            "Ignition Coils": {
-                "Coil failure": {
-                    "failure_code": "ENG-IGN-010",
-                    "cause_code": "ENG-IGN-C010",
-                    "resolution_code": "ENG-IGN-R010",
-                    "recommended_action": "Replace ignition coil; Check connections; Test resistance"
-                }
-            }
-        },
-        "Cooling": {
-            "Radiator": {
-                "Radiator leak": {
-                    "failure_code": "ENG-COOL-001",
-                    "cause_code": "ENG-COOL-C001",
-                    "resolution_code": "ENG-COOL-R001",
-                    "recommended_action": "Replace radiator; Pressure test; Check coolant level"
-                },
-                "Clogged radiator": {
-                    "failure_code": "ENG-COOL-002",
-                    "cause_code": "ENG-COOL-C002",
-                    "resolution_code": "ENG-COOL-R002",
-                    "recommended_action": "Flush radiator; Clean fins; Check thermostat"
-                }
-            },
-            "Water Pump": {
-                "Pump leak": {
-                    "failure_code": "ENG-COOL-010",
-                    "cause_code": "ENG-COOL-C010",
-                    "resolution_code": "ENG-COOL-R010",
-                    "recommended_action": "Replace water pump; Replace gasket; Check belt tension"
-                },
-                "Bearing failure": {
-                    "failure_code": "ENG-COOL-011",
-                    "cause_code": "ENG-COOL-C011",
-                    "resolution_code": "ENG-COOL-R011",
-                    "recommended_action": "Replace water pump; Inspect drive belt"
-                }
-            }
-        }
-    },
-    "Transmission": {
-        "Automatic": {
-            "Transmission Fluid": {
-                "Low fluid": {
-                    "failure_code": "TRANS-AT-001",
-                    "cause_code": "TRANS-AT-C001",
-                    "resolution_code": "TRANS-AT-R001",
-                    "recommended_action": "Check for leaks; Add fluid to proper level; Replace filter"
-                },
-                "Contaminated fluid": {
-                    "failure_code": "TRANS-AT-002",
-                    "cause_code": "TRANS-AT-C002",
-                    "resolution_code": "TRANS-AT-R002",
-                    "recommended_action": "Flush transmission; Replace fluid; Replace filter"
-                }
-            },
-            "Torque Converter": {
-                "Converter failure": {
-                    "failure_code": "TRANS-AT-010",
-                    "cause_code": "TRANS-AT-C010",
-                    "resolution_code": "TRANS-AT-R010",
-                    "recommended_action": "Replace torque converter; Flush system; Check fluid"
-                }
-            }
-        }
-    },
-    "Brakes": {
-        "Hydraulic": {
-            "Master Cylinder": {
-                "Internal leak": {
-                    "failure_code": "BRK-HYD-001",
-                    "cause_code": "BRK-HYD-C001",
-                    "resolution_code": "BRK-HYD-R001",
-                    "recommended_action": "Replace master cylinder; Bleed brake system"
-                },
-                "External leak": {
-                    "failure_code": "BRK-HYD-002",
-                    "cause_code": "BRK-HYD-C002",
-                    "resolution_code": "BRK-HYD-R002",
-                    "recommended_action": "Replace master cylinder; Check brake lines"
-                }
-            },
-            "Brake Lines": {
-                "Line rupture": {
-                    "failure_code": "BRK-HYD-010",
-                    "cause_code": "BRK-HYD-C010",
-                    "resolution_code": "BRK-HYD-R010",
-                    "recommended_action": "Replace brake line; Bleed system; Pressure test"
-                }
-            }
-        },
-        "Friction": {
-            "Brake Pads": {
-                "Worn pads": {
-                    "failure_code": "BRK-FRIC-001",
-                    "cause_code": "BRK-FRIC-C001",
-                    "resolution_code": "BRK-FRIC-R001",
-                    "recommended_action": "Replace brake pads; Resurface rotors; Lubricate slides"
-                },
-                "Glazed pads": {
-                    "failure_code": "BRK-FRIC-002",
-                    "cause_code": "BRK-FRIC-C002",
-                    "resolution_code": "BRK-FRIC-R002",
-                    "recommended_action": "Replace brake pads; Check rotor condition"
-                }
-            },
-            "Rotors": {
-                "Warped rotor": {
-                    "failure_code": "BRK-FRIC-010",
-                    "cause_code": "BRK-FRIC-C010",
-                    "resolution_code": "BRK-FRIC-R010",
-                    "recommended_action": "Replace or resurface rotor; Replace pads"
-                }
-            }
-        }
-    },
-    "Electrical": {
-        "Battery": {
-            "12V Battery": {
-                "Dead battery": {
-                    "failure_code": "ELEC-BAT-001",
-                    "cause_code": "ELEC-BAT-C001",
-                    "resolution_code": "ELEC-BAT-R001",
-                    "recommended_action": "Test battery; Replace if failed; Check charging system"
-                },
-                "Low charge": {
-                    "failure_code": "ELEC-BAT-002",
-                    "cause_code": "ELEC-BAT-C002",
-                    "resolution_code": "ELEC-BAT-R002",
-                    "recommended_action": "Charge battery; Test alternator; Check for parasitic draw"
-                }
-            }
-        },
-        "Charging": {
-            "Alternator": {
-                "No charge": {
-                    "failure_code": "ELEC-CHG-001",
-                    "cause_code": "ELEC-CHG-C001",
-                    "resolution_code": "ELEC-CHG-R001",
-                    "recommended_action": "Replace alternator; Check belt; Test output"
-                },
-                "Noisy bearing": {
-                    "failure_code": "ELEC-CHG-002",
-                    "cause_code": "ELEC-CHG-C002",
-                    "resolution_code": "ELEC-CHG-R002",
-                    "recommended_action": "Replace alternator; Check belt tension"
-                }
-            }
-        }
-    },
-    "Suspension": {
-        "Front": {
-            "Struts": {
-                "Leaking strut": {
-                    "failure_code": "SUSP-FRT-001",
-                    "cause_code": "SUSP-FRT-C001",
-                    "resolution_code": "SUSP-FRT-R001",
-                    "recommended_action": "Replace strut assembly; Perform alignment"
-                },
-                "Worn mount": {
-                    "failure_code": "SUSP-FRT-002",
-                    "cause_code": "SUSP-FRT-C002",
-                    "resolution_code": "SUSP-FRT-R002",
-                    "recommended_action": "Replace strut mount; Check strut condition"
-                }
-            },
-            "Control Arms": {
-                "Worn bushings": {
-                    "failure_code": "SUSP-FRT-010",
-                    "cause_code": "SUSP-FRT-C010",
-                    "resolution_code": "SUSP-FRT-R010",
-                    "recommended_action": "Replace control arm bushings; Perform alignment"
-                }
-            }
-        }
-    },
-    "Tires/Wheels": {
-        "Tires": {
-            "Tire Condition": {
-                "Worn tread": {
-                    "failure_code": "TIRE-COND-001",
-                    "cause_code": "TIRE-COND-C001",
-                    "resolution_code": "TIRE-COND-R001",
-                    "recommended_action": "Replace tire; Check alignment; Rotate remaining tires"
-                },
-                "Puncture": {
-                    "failure_code": "TIRE-COND-002",
-                    "cause_code": "TIRE-COND-C002",
-                    "resolution_code": "TIRE-COND-R002",
-                    "recommended_action": "Repair or replace tire; Check for debris"
-                }
-            }
-        }
-    }
-}
-
-# ============================================================================
-# HELPER FUNCTIONS FOR CATALOGUE
+# DATA INITIALIZATION
 # ============================================================================
 
-def get_systems():
-    """Get list of all systems"""
-    return list(CATALOGUE_HIERARCHY.keys())
+def hash_password(password):
+    """Simple password hashing"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def get_subsystems(system):
-    """Get subsystems for a given system"""
-    if system in CATALOGUE_HIERARCHY:
-        return list(CATALOGUE_HIERARCHY[system].keys())
-    return []
-
-def get_components(system, subsystem):
-    """Get components for a given system and subsystem"""
-    if system in CATALOGUE_HIERARCHY:
-        if subsystem in CATALOGUE_HIERARCHY[system]:
-            return list(CATALOGUE_HIERARCHY[system][subsystem].keys())
-    return []
-
-def get_failure_modes(system, subsystem, component):
-    """Get failure modes for a given system, subsystem, and component"""
-    if system in CATALOGUE_HIERARCHY:
-        if subsystem in CATALOGUE_HIERARCHY[system]:
-            if component in CATALOGUE_HIERARCHY[system][subsystem]:
-                return list(CATALOGUE_HIERARCHY[system][subsystem][component].keys())
-    return []
-
-def get_fault_details(system, subsystem, component, failure_mode):
-    """Get fault details for a specific failure"""
-    try:
-        details = CATALOGUE_HIERARCHY[system][subsystem][component][failure_mode]
-        return details
-    except:
-        return None
-
-# ============================================================================
-# DATABASE FUNCTIONS
-# ============================================================================
-
-def get_db_engine():
-    """Create or return existing database engine"""
-    if st.session_state.db_engine is None:
-        st.session_state.db_engine = create_engine(
-            "sqlite:///",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool
-        )
-        init_database()
-    return st.session_state.db_engine
-
-def init_database():
-    """Initialize database tables"""
-    engine = st.session_state.db_engine
+def init_data():
+    """Initialize all data tables in session state"""
     
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS work_orders (
-                wo_id TEXT PRIMARY KEY,
-                vehicle_id TEXT,
-                system TEXT,
-                subsystem TEXT,
-                component TEXT,
-                failure_mode TEXT,
-                failure_code TEXT,
-                cause_code TEXT,
-                resolution_code TEXT,
-                recommended_action TEXT,
-                failure_date TEXT,
-                reported_by TEXT,
-                status TEXT,
-                priority TEXT,
-                labor_hours REAL,
-                parts_cost REAL,
-                description TEXT,
-                resolution_notes TEXT,
-                created_at TEXT,
-                completed_at TEXT
-            )
-        """))
-    
-    st.session_state.app_initialized = True
-
-def load_work_orders():
-    """Load all work orders"""
-    engine = get_db_engine()
-    try:
-        df = pd.read_sql("SELECT * FROM work_orders", engine)
-        if not df.empty:
-            df['labor_hours'] = pd.to_numeric(df['labor_hours'], errors='coerce')
-            df['parts_cost'] = pd.to_numeric(df['parts_cost'], errors='coerce')
-            df['failure_date'] = pd.to_datetime(df['failure_date'], errors='coerce')
-        return df
-    except:
-        return pd.DataFrame()
-
-def save_work_order(wo_data):
-    """Save work order to database"""
-    engine = get_db_engine()
-    df = pd.DataFrame([wo_data])
-    df.to_sql('work_orders', engine, if_exists='append', index=False)
-    return True
-
-def generate_demo_data(n_records=100):
-    """Generate demonstration data"""
-    records = []
-    statuses = ["Open", "In Progress", "Completed", "On Hold"]
-    priorities = ["Low", "Medium", "High", "Critical"]
-    vehicles = [f"VEH-{i:04d}" for i in range(1, 51)]
-    techs = [f"tech_{i:03d}" for i in range(1, 11)]
-    
-    for i in range(n_records):
-        # Randomly select from catalogue
-        system = random.choice(get_systems())
-        subsystems = get_subsystems(system)
-        if not subsystems:
-            continue
-        subsystem = random.choice(subsystems)
-        
-        components = get_components(system, subsystem)
-        if not components:
-            continue
-        component = random.choice(components)
-        
-        failure_modes = get_failure_modes(system, subsystem, component)
-        if not failure_modes:
-            continue
-        failure_mode = random.choice(failure_modes)
-        
-        # Get fault details
-        details = get_fault_details(system, subsystem, component, failure_mode)
-        
-        failure_date = datetime.now() - timedelta(days=random.randint(0, 365))
-        status = random.choice(statuses)
-        
-        record = {
-            'wo_id': f"WO-{datetime.now().year}-{i+1:05d}",
-            'vehicle_id': random.choice(vehicles),
-            'system': system,
-            'subsystem': subsystem,
-            'component': component,
-            'failure_mode': failure_mode,
-            'failure_code': details.get('failure_code', '') if details else '',
-            'cause_code': details.get('cause_code', '') if details else '',
-            'resolution_code': details.get('resolution_code', '') if details else '',
-            'recommended_action': details.get('recommended_action', '') if details else '',
-            'failure_date': failure_date.strftime('%Y-%m-%d'),
-            'reported_by': random.choice(techs),
-            'status': status,
-            'priority': random.choice(priorities),
-            'labor_hours': round(random.uniform(0.5, 24.0), 2),
-            'parts_cost': round(random.uniform(50, 5000), 2),
-            'description': f"Failure detected in {system} - {subsystem} - {component}",
-            'resolution_notes': "Completed as per recommended action" if status == "Completed" else "",
-            'created_at': failure_date.strftime('%Y-%m-%d %H:%M:%S'),
-            'completed_at': (failure_date + timedelta(days=random.randint(1, 30))).strftime('%Y-%m-%d') if status == "Completed" else None
-        }
-        records.append(record)
-    
-    # Save to database
-    engine = get_db_engine()
-    df = pd.DataFrame(records)
-    df.to_sql('work_orders', engine, if_exists='replace', index=False)
-    
-    return len(records)
-
-# ============================================================================
-# UI COMPONENTS
-# ============================================================================
-
-def render_sidebar():
-    """Render sidebar navigation"""
-    with st.sidebar:
-        st.title("🚗 AMIC FRACAS")
-        st.caption("Enhanced Demo Version")
-        st.markdown("---")
-        
-        menu = st.radio(
-            "Navigation",
-            ["📊 Dashboard", "📋 Work Orders", "➕ New Work Order", "📈 Analytics", "⚙️ Data Management"],
-            index=0
-        )
-        
-        st.markdown("---")
-        
-        # Quick stats
-        df = load_work_orders()
-        if not df.empty:
-            st.caption("**Quick Stats**")
-            st.caption(f"Total WOs: {len(df)}")
-            st.caption(f"Open: {len(df[df['status']=='Open'])}")
-            st.caption(f"Completed: {len(df[df['status']=='Completed'])}")
-        
-        st.markdown("---")
-        st.caption(f"👤 {st.session_state.current_user}")
-        st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        
-        return menu.split(" ", 1)[1]  # Remove emoji
-
-def render_dashboard():
-    """Render main dashboard"""
-    st.title("📊 FRACAS Dashboard")
-    
-    df = load_work_orders()
-    
-    if df.empty:
-        st.warning("⚠️ No work orders found in database")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Generate 100 Demo Records", use_container_width=True):
-                n = generate_demo_data(100)
-                st.success(f"✓ Generated {n} work orders!")
-                st.rerun()
-        with col2:
-            if st.button("Generate 500 Demo Records", use_container_width=True):
-                n = generate_demo_data(500)
-                st.success(f"✓ Generated {n} work orders!")
-                st.rerun()
+    if 'data_initialized' in st.session_state and st.session_state.data_initialized:
         return
     
-    # KPI Metrics Row
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # ========================================================================
+    # REFERENCE TABLES
+    # ========================================================================
+    
+    # Department
+    st.session_state.df_department = pd.DataFrame({
+        'Department_Code': ['TECH', 'INV', 'PROC', 'OPS', 'ADMIN'],
+        'Department_Name': ['Technical Services', 'Inventory Management', 'Procurement', 'Operations', 'Administration'],
+        'Department_Supervisor': ['Ahmed Al-Rashid', 'Fatima Al-Qasim', 'Mohammed Al-Harbi', 'Khalid Al-Mansour', 'Sara Al-Fahad']
+    })
+    
+    # Region
+    st.session_state.df_region = pd.DataFrame({
+        'Region_ID': [1, 2, 3, 4, 5],
+        'Region_Name': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
+    })
+    
+    # Workshop
+    st.session_state.df_workshop = pd.DataFrame({
+        'Workshop_Name': ['Workshop Alpha', 'Workshop Beta', 'Workshop Gamma', 'Workshop Delta', 'Workshop Epsilon'],
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern'],
+        'Unit_Name': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105']
+    })
+    
+    # Unit
+    st.session_state.df_unit = pd.DataFrame({
+        'Unit_Name': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105'],
+        'Workshop_Name': ['Workshop Alpha', 'Workshop Beta', 'Workshop Gamma', 'Workshop Delta', 'Workshop Epsilon'],
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
+    })
+    
+    # Battalion
+    st.session_state.df_battalion = pd.DataFrame({
+        'Battalion_Name': ['Battalion 1A', 'Battalion 1B', 'Battalion 2A', 'Battalion 2B', 'Battalion 3A'],
+        'Unit_Name': ['Unit 101', 'Unit 101', 'Unit 102', 'Unit 102', 'Unit 103'],
+        'Vehicle_Number': ['VEH-001', 'VEH-002', 'VEH-003', 'VEH-004', 'VEH-005']
+    })
+    
+    # ========================================================================
+    # USERS
+    # ========================================================================
+    
+    st.session_state.df_user = pd.DataFrame({
+        'Employee_ID': [1, 2, 3, 4, 5, 6, 7, 8],
+        'Department_Code': ['TECH', 'TECH', 'TECH', 'INV', 'PROC', 'OPS', 'OPS', 'ADMIN'],
+        'Employee_First_Name': ['Ali', 'Omar', 'Yousef', 'Layla', 'Hassan', 'Nora', 'Tariq', 'Admin'],
+        'Employee_Last_Name': ['Al-Saud', 'Al-Harbi', 'Al-Qahtani', 'Al-Otaibi', 'Al-Shammari', 'Al-Dosari', 'Al-Mutairi', 'User'],
+        'Job_Title': ['Technician', 'Supervisor', 'Technician', 'Inventory Specialist', 'Procurement Officer', 'Manager', 'Supervisor', 'System Admin'],
+        'Resource_ID': ['RES001', 'RES002', 'RES003', 'RES004', 'RES005', 'RES006', 'RES007', 'RES008'],
+        'Username': ['ali.tech', 'omar.super', 'yousef.tech', 'layla.inv', 'hassan.proc', 'nora.mgr', 'tariq.super', 'admin'],
+        'Password': [hash_password('tech123'), hash_password('super123'), hash_password('tech123'), 
+                    hash_password('inv123'), hash_password('proc123'), hash_password('mgr123'), 
+                    hash_password('super123'), hash_password('admin123')],
+        'Role': ['Technician', 'Supervisor', 'Technician', 'Inventory', 'Procurement', 'Manager', 'Supervisor', 'Admin'],
+        'Workshop_Name': ['Workshop Alpha', 'Workshop Alpha', 'Workshop Beta', None, None, None, 'Workshop Beta', None],
+        'Region': ['Central', 'Central', 'Eastern', None, None, None, 'Eastern', None]
+    })
+    
+    # ========================================================================
+    # VEHICLES
+    # ========================================================================
+    
+    st.session_state.df_vehicle = pd.DataFrame({
+        'Vehicle_Number': ['VEH-001', 'VEH-002', 'VEH-003', 'VEH-004', 'VEH-005', 
+                          'VEH-006', 'VEH-007', 'VEH-008', 'VEH-009', 'VEH-010'],
+        'Unit_Name': ['Unit 101', 'Unit 101', 'Unit 102', 'Unit 102', 'Unit 103', 
+                     'Unit 103', 'Unit 104', 'Unit 104', 'Unit 105', 'Unit 105'],
+        'Battalion_Name': ['Battalion 1A', 'Battalion 1B', 'Battalion 2A', 'Battalion 2B', 'Battalion 3A',
+                          'Battalion 1A', 'Battalion 2A', 'Battalion 2B', 'Battalion 3A', 'Battalion 1B'],
+        'Vehicle_Type': ['MRAP', 'APC', 'Transport', 'MRAP', 'APC', 
+                        'Transport', 'MRAP', 'APC', 'Transport', 'MRAP'],
+        'Vehicle_Brand': ['Oshkosh', 'BAE Systems', 'Mercedes', 'Oshkosh', 'BAE Systems',
+                         'Mercedes', 'Oshkosh', 'BAE Systems', 'Mercedes', 'Oshkosh'],
+        'Vehicle_Chassis_Number': [f'CHAS{i:06d}' for i in range(1, 11)]
+    })
+    
+    # ========================================================================
+    # FAILURE CATALOGUE
+    # ========================================================================
+    
+    st.session_state.df_failure_catalogue = pd.DataFrame({
+        'System': [
+            'HVAC', 'HVAC', 'HVAC', 'HVAC', 'HVAC',
+            'Engine', 'Engine', 'Engine', 'Engine', 'Engine',
+            'Brakes', 'Brakes', 'Brakes', 'Brakes',
+            'Suspension', 'Suspension', 'Suspension',
+            'Electrical', 'Electrical', 'Electrical'
+        ],
+        'Subsystem': [
+            'Air Conditioning', 'Air Conditioning', 'Air Conditioning', 'Heating', 'Heating',
+            'Fuel System', 'Fuel System', 'Ignition', 'Ignition', 'Cooling',
+            'Hydraulic', 'Hydraulic', 'Friction', 'Friction',
+            'Front', 'Front', 'Rear',
+            'Battery', 'Charging', 'Charging'
+        ],
+        'Component': [
+            'Compressor', 'Condenser', 'Blower Motor', 'Heater Core', 'Heater Core',
+            'Fuel Pump', 'Fuel Injectors', 'Spark Plugs', 'Ignition Coils', 'Radiator',
+            'Master Cylinder', 'Brake Lines', 'Brake Pads', 'Rotors',
+            'Struts', 'Control Arms', 'Shock Absorbers',
+            '12V Battery', 'Alternator', 'Alternator'
+        ],
+        'Failure_Mode': [
+            'Mechanical seizure', 'Leak at tubes', 'Motor burnt', 'Core leak', 'Blockage',
+            'Pump failure', 'Injector clogged', 'Fouled plugs', 'Coil failure', 'Radiator leak',
+            'Internal leak', 'Line rupture', 'Worn pads', 'Warped rotor',
+            'Leaking strut', 'Worn bushings', 'Shock failure',
+            'Dead battery', 'No charge', 'Noisy bearing'
+        ],
+        'Failure_Code': [
+            'HVAC-AC-001', 'HVAC-AC-010', 'HVAC-AC-020', 'HVAC-HT-001', 'HVAC-HT-002',
+            'ENG-FUEL-001', 'ENG-FUEL-010', 'ENG-IGN-001', 'ENG-IGN-010', 'ENG-COOL-001',
+            'BRK-HYD-001', 'BRK-HYD-010', 'BRK-FRIC-001', 'BRK-FRIC-010',
+            'SUSP-FRT-001', 'SUSP-FRT-010', 'SUSP-REAR-001',
+            'ELEC-BAT-001', 'ELEC-CHG-001', 'ELEC-CHG-002'
+        ],
+        'Cause_Code': [
+            'HVAC-AC-C001', 'HVAC-AC-C010', 'HVAC-AC-C020', 'HVAC-HT-C001', 'HVAC-HT-C002',
+            'ENG-FUEL-C001', 'ENG-FUEL-C010', 'ENG-IGN-C001', 'ENG-IGN-C010', 'ENG-COOL-C001',
+            'BRK-HYD-C001', 'BRK-HYD-C010', 'BRK-FRIC-C001', 'BRK-FRIC-C010',
+            'SUSP-FRT-C001', 'SUSP-FRT-C010', 'SUSP-REAR-C001',
+            'ELEC-BAT-C001', 'ELEC-CHG-C001', 'ELEC-CHG-C002'
+        ],
+        'Resolution_Code': [
+            'HVAC-AC-R001', 'HVAC-AC-R010', 'HVAC-AC-R020', 'HVAC-HT-R001', 'HVAC-HT-R002',
+            'ENG-FUEL-R001', 'ENG-FUEL-R010', 'ENG-IGN-R001', 'ENG-IGN-R010', 'ENG-COOL-R001',
+            'BRK-HYD-R001', 'BRK-HYD-R010', 'BRK-FRIC-R001', 'BRK-FRIC-R010',
+            'SUSP-FRT-R001', 'SUSP-FRT-R010', 'SUSP-REAR-R001',
+            'ELEC-BAT-R001', 'ELEC-CHG-R001', 'ELEC-CHG-R002'
+        ],
+        'Recommended_Action': [
+            'Replace compressor; Replace clutch; Flush circuit; Replace filter/drier; Vacuum & recharge',
+            'Replace condenser; Clean fins; Leak test; Vacuum & recharge',
+            'Replace blower motor; Inspect resistor; Verify airflow',
+            'Replace heater core; Flush circuit; Bleed system',
+            'Flush heater core; Check coolant flow; Replace if needed',
+            'Replace fuel pump; Check electrical; Verify fuel quality',
+            'Clean injectors; Replace if needed; Check fuel quality',
+            'Replace spark plugs; Check gap; Verify ignition timing',
+            'Replace ignition coil; Check connections; Test resistance',
+            'Replace radiator; Pressure test; Check coolant level',
+            'Replace master cylinder; Bleed brake system',
+            'Replace brake line; Bleed system; Pressure test',
+            'Replace brake pads; Resurface rotors; Lubricate slides',
+            'Replace or resurface rotor; Replace pads',
+            'Replace strut assembly; Perform alignment',
+            'Replace control arm bushings; Perform alignment',
+            'Replace shock absorbers; Check mounting points',
+            'Test battery; Replace if failed; Check charging system',
+            'Replace alternator; Check belt; Test output',
+            'Replace alternator; Check belt tension'
+        ]
+    })
+    
+    # ========================================================================
+    # WORK ORDERS & MALFUNCTIONS
+    # ========================================================================
+    
+    # Generate sample work orders
+    work_orders = []
+    malfunctions = []
+    wo_id_counter = 1
+    mal_id_counter = 1
+    
+    for i in range(20):
+        # Random selections
+        vehicle = st.session_state.df_vehicle.sample(1).iloc[0]
+        workshop = st.session_state.df_workshop.sample(1).iloc[0]
+        failure = st.session_state.df_failure_catalogue.sample(1).iloc[0]
+        technician = st.session_state.df_user[st.session_state.df_user['Role'] == 'Technician'].sample(1).iloc[0]
+        
+        malfunction_date = datetime.now() - timedelta(days=np.random.randint(1, 180))
+        wo_date = malfunction_date + timedelta(days=np.random.randint(0, 3))
+        
+        status = np.random.choice(['Open', 'In Progress', 'Completed'], p=[0.3, 0.4, 0.3])
+        require_parts = np.random.choice([True, False], p=[0.6, 0.4])
+        
+        completion_date = None
+        if status == 'Completed':
+            completion_date = wo_date + timedelta(days=np.random.randint(1, 30))
+        
+        work_order = {
+            'Work_Order_ID': wo_id_counter,
+            'Employee_ID': technician['Employee_ID'],
+            'Workshop_Name': workshop['Workshop_Name'],
+            'Vehicle_Number': vehicle['Vehicle_Number'],
+            'A_Received_Date': wo_date.strftime('%Y-%m-%d'),
+            'Equipment_Owning_Unit': vehicle['Unit_Name'],
+            'Vehicle_Type': vehicle['Vehicle_Type'],
+            'Malfunction_Date': malfunction_date.strftime('%Y-%m-%d'),
+            'Work_Order_Date': wo_date.strftime('%Y-%m-%d'),
+            'Technician_Name': f"{technician['Employee_First_Name']} {technician['Employee_Last_Name']}",
+            'Work_Order_Status': status,
+            'Require_Spare_Parts': require_parts,
+            'Work_Order_Completion_Date': completion_date.strftime('%Y-%m-%d') if completion_date else None,
+            'Comments': f"Work order for {failure['System']} - {failure['Subsystem']} issue"
+        }
+        
+        malfunction = {
+            'Malfunction_ID': mal_id_counter,
+            'Vehicle_Number': vehicle['Vehicle_Number'],
+            'Work_Order_ID': wo_id_counter,
+            'Malfunction_Code': failure['Failure_Code'],
+            'Resolution_Description_English': failure['Recommended_Action'],
+            'Resolution_Description_Arabic': 'إجراء موصى به',
+            'Root_Cause': failure['Failure_Mode'],
+            'Cause_Code': failure['Cause_Code'],
+            'Cause_Description_English': failure['Failure_Mode'],
+            'Cause_Description_Arabic': 'وصف السبب',
+            'Fault_Code': failure['Failure_Code']
+        }
+        
+        work_orders.append(work_order)
+        malfunctions.append(malfunction)
+        wo_id_counter += 1
+        mal_id_counter += 1
+    
+    st.session_state.df_work_orders = pd.DataFrame(work_orders)
+    st.session_state.df_malfunction = pd.DataFrame(malfunctions)
+    
+    # ========================================================================
+    # WAREHOUSE & PARTS
+    # ========================================================================
+    
+    st.session_state.df_warehouse = pd.DataFrame({
+        'Warehouse_ID': [1, 2, 3, 4, 5],
+        'Warehouse_Name': ['Central Warehouse', 'Eastern Warehouse', 'Western Warehouse', 'Northern Warehouse', 'Southern Warehouse'],
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern'],
+        'Unit': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105']
+    })
+    
+    st.session_state.df_part = pd.DataFrame({
+        'Part_ID': range(1, 21),
+        'Warehouse_Code': ['WH-C', 'WH-E', 'WH-W', 'WH-N', 'WH-S'] * 4,
+        'Part_Number': [f'PN-{i:05d}' for i in range(1, 21)],
+        'OEM_Number': [f'OEM-{i:05d}' for i in range(1, 21)],
+        'English_Description': ['Compressor Assembly', 'Fuel Pump Kit', 'Brake Pad Set', 'Alternator', 'Strut Assembly',
+                               'Ignition Coil', 'Radiator', 'Battery 12V', 'Fuel Injector', 'Heater Core',
+                               'Master Cylinder', 'Shock Absorber', 'Spark Plug Set', 'Brake Rotor', 'Control Arm',
+                               'Condenser', 'Blower Motor', 'Water Pump', 'Thermostat', 'Belt Tensioner'],
+        'Arabic_Description': ['مجموعة الضاغط', 'طقم مضخة الوقود', 'طقم فرامل', 'مولد', 'مجموعة دعامة',
+                              'ملف الإشعال', 'المبرد', 'بطارية 12 فولت', 'حاقن الوقود', 'نواة السخان',
+                              'اسطوانة رئيسية', 'ممتص الصدمات', 'طقم شمعة إشعال', 'قرص الفرامل', 'ذراع التحكم',
+                              'المكثف', 'محرك النفخ', 'مضخة الماء', 'منظم الحرارة', 'شد الحزام'],
+        'Part_Location': [f'A-{i:02d}' for i in range(1, 21)],
+        'Part_Quantity': np.random.randint(5, 100, 20)
+    })
+    
+    st.session_state.df_supply_request = pd.DataFrame({
+        'Supply_Request_ID': [1, 2, 3],
+        'Work_Order_ID': [1, 2, 5],
+        'Part_ID': [1, 2, 3],
+        'Quantity_Requested': [2, 1, 4],
+        'Status': ['Pending', 'Approved', 'Issued']
+    })
+    
+    st.session_state.df_purchase_request = pd.DataFrame({
+        'PR_ID': [1, 2],
+        'Supply_Request_ID': [1, 2],
+        'Employee_ID': [5, 5],
+        'PR_Date': [(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
+                    (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')],
+        'Status': ['Pending', 'Approved']
+    })
+    
+    st.session_state.df_orders = pd.DataFrame({
+        'PO_ID': [1],
+        'Order_Status': ['In Transit'],
+        'Order_Date': [(datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')],
+        'Delivery_Date': [(datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d')],
+        'Warehouse_Status': ['Pending Receipt']
+    })
+    
+    # Counter for new IDs
+    st.session_state.work_order_id_counter = wo_id_counter
+    st.session_state.malfunction_id_counter = mal_id_counter
+    st.session_state.supply_request_id_counter = 4
+    st.session_state.purchase_request_id_counter = 3
+    st.session_state.order_id_counter = 2
+    
+    st.session_state.data_initialized = True
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+
+def login_page():
+    """Display login page"""
+    st.title("🔧 AMIC MMS - Work Order Management")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.subheader("🔐 Login")
+        
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+        
+        if st.button("Login", use_container_width=True, type="primary"):
+            if username and password:
+                hashed_pw = hash_password(password)
+                user = st.session_state.df_user[
+                    (st.session_state.df_user['Username'] == username) & 
+                    (st.session_state.df_user['Password'] == hashed_pw)
+                ]
+                
+                if not user.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = user.iloc[0].to_dict()
+                    st.success(f"Welcome, {user.iloc[0]['Employee_First_Name']}!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
+            else:
+                st.warning("Please enter both username and password")
+        
+        st.markdown("---")
+        st.info("""
+        **Demo Accounts:**
+        - Technician: `ali.tech` / `tech123`
+        - Supervisor: `omar.super` / `super123`
+        - Manager: `nora.mgr` / `mgr123`
+        - Inventory: `layla.inv` / `inv123`
+        - Procurement: `hassan.proc` / `proc123`
+        - Admin: `admin` / `admin123`
+        """)
+
+def logout():
+    """Handle logout"""
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
+    st.rerun()
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_cascading_options(system=None, subsystem=None, component=None):
+    """Get cascading dropdown options from failure catalogue"""
+    df = st.session_state.df_failure_catalogue
+    
+    if system is None:
+        return sorted(df['System'].unique().tolist())
+    
+    df = df[df['System'] == system]
+    if subsystem is None:
+        return sorted(df['Subsystem'].unique().tolist())
+    
+    df = df[df['Subsystem'] == subsystem]
+    if component is None:
+        return sorted(df['Component'].unique().tolist())
+    
+    df = df[df['Component'] == component]
+    return sorted(df['Failure_Mode'].unique().tolist())
+
+def get_failure_details(system, subsystem, component, failure_mode):
+    """Get failure details from catalogue"""
+    df = st.session_state.df_failure_catalogue
+    result = df[
+        (df['System'] == system) & 
+        (df['Subsystem'] == subsystem) & 
+        (df['Component'] == component) & 
+        (df['Failure_Mode'] == failure_mode)
+    ]
+    
+    if not result.empty:
+        return result.iloc[0].to_dict()
+    return None
+
+# ============================================================================
+# PAGES
+# ============================================================================
+
+def page_dashboard():
+    """Home dashboard for all users"""
+    st.title("📊 Dashboard")
+    
+    user = st.session_state.current_user
+    st.write(f"Welcome, **{user['Employee_First_Name']} {user['Employee_Last_Name']}** ({user['Role']})")
+    
+    st.markdown("---")
+    
+    # Filter work orders based on role
+    df_wo = st.session_state.df_work_orders.copy()
+    
+    if user['Role'] in ['Technician', 'Supervisor']:
+        # Filter by workshop
+        df_wo = df_wo[df_wo['Workshop_Name'] == user['Workshop_Name']]
+    
+    # KPIs
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total Work Orders", f"{len(df):,}")
+        st.metric("Total Work Orders", len(df_wo))
+    
     with col2:
-        open_count = len(df[df['status'].isin(['Open', 'In Progress'])])
-        st.metric("Open/In Progress", open_count)
+        open_count = len(df_wo[df_wo['Work_Order_Status'] == 'Open'])
+        st.metric("Open", open_count)
+    
     with col3:
-        completed = len(df[df['status'] == 'Completed'])
-        completion_rate = (completed / len(df) * 100) if len(df) > 0 else 0
-        st.metric("Completed", f"{completed} ({completion_rate:.0f}%)")
+        in_progress = len(df_wo[df_wo['Work_Order_Status'] == 'In Progress'])
+        st.metric("In Progress", in_progress)
+    
     with col4:
-        total_cost = df['parts_cost'].sum()
-        st.metric("Parts Cost", f"${total_cost:,.0f}")
-    with col5:
-        labor_cost = df['labor_hours'].sum() * 85
-        st.metric("Labor Cost", f"${labor_cost:,.0f}")
+        completed = len(df_wo[df_wo['Work_Order_Status'] == 'Completed'])
+        st.metric("Completed", completed)
     
+    # Charts
     st.markdown("---")
     
-    # Charts Row 1
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Work Orders by System")
-        system_counts = df['system'].value_counts().reset_index()
-        system_counts.columns = ['System', 'Count']
-        
-        chart = alt.Chart(system_counts).mark_bar().encode(
-            x=alt.X('Count:Q', title='Number of Work Orders'),
-            y=alt.Y('System:N', sort='-x', title='System'),
-            color=alt.Color('System:N', legend=None),
-            tooltip=['System', 'Count']
-        ).properties(height=400)
-        
-        st.altair_chart(chart, use_container_width=True)
-    
-    with col2:
         st.subheader("Work Orders by Status")
-        status_counts = df['status'].value_counts().reset_index()
-        status_counts.columns = ['Status', 'Count']
-        
-        chart = alt.Chart(status_counts).mark_arc(innerRadius=50).encode(
-            theta=alt.Theta('Count:Q'),
-            color=alt.Color('Status:N', scale=alt.Scale(scheme='category10')),
-            tooltip=['Status', 'Count']
-        ).properties(height=400)
-        
-        st.altair_chart(chart, use_container_width=True)
-    
-    # Charts Row 2
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Work Orders by Priority")
-        priority_counts = df['priority'].value_counts().reset_index()
-        priority_counts.columns = ['Priority', 'Count']
-        
-        # Define priority order and colors
-        priority_order = ['Critical', 'High', 'Medium', 'Low']
-        colors = {'Critical': '#DC2626', 'High': '#F59E0B', 'Medium': '#3B82F6', 'Low': '#10B981'}
-        
-        chart = alt.Chart(priority_counts).mark_bar().encode(
-            x=alt.X('Count:Q'),
-            y=alt.Y('Priority:N', sort=priority_order),
-            color=alt.Color('Priority:N', scale=alt.Scale(domain=list(colors.keys()), range=list(colors.values())), legend=None),
-            tooltip=['Priority', 'Count']
-        ).properties(height=300)
-        
-        st.altair_chart(chart, use_container_width=True)
+        status_counts = df_wo['Work_Order_Status'].value_counts()
+        st.bar_chart(status_counts)
     
     with col2:
-        st.subheader("Cost Analysis")
-        cost_data = pd.DataFrame({
-            'Category': ['Parts', 'Labor'],
-            'Cost': [df['parts_cost'].sum(), df['labor_hours'].sum() * 85]
-        })
-        
-        chart = alt.Chart(cost_data).mark_arc(innerRadius=50).encode(
-            theta=alt.Theta('Cost:Q'),
-            color=alt.Color('Category:N', scale=alt.Scale(scheme='tableau10')),
-            tooltip=[alt.Tooltip('Category:N'), alt.Tooltip('Cost:Q', format='$,.0f')]
-        ).properties(height=300)
-        
-        st.altair_chart(chart, use_container_width=True)
+        st.subheader("Work Orders by Workshop")
+        workshop_counts = df_wo['Workshop_Name'].value_counts()
+        st.bar_chart(workshop_counts)
     
-    # Recent Work Orders Table
+    # Recent work orders
     st.markdown("---")
     st.subheader("Recent Work Orders")
     
-    recent = df.sort_values('created_at', ascending=False).head(15)
-    display_cols = ['wo_id', 'vehicle_id', 'system', 'subsystem', 'failure_mode', 'status', 'priority', 'failure_code', 'created_at']
+    display_cols = ['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status', 
+                   'Malfunction_Date', 'Technician_Name']
     
     st.dataframe(
-        recent[display_cols],
+        df_wo[display_cols].head(10),
         use_container_width=True,
-        hide_index=True,
-        column_config={
-            'wo_id': 'Work Order ID',
-            'vehicle_id': 'Vehicle',
-            'system': 'System',
-            'subsystem': 'Subsystem',
-            'failure_mode': 'Failure Mode',
-            'status': 'Status',
-            'priority': 'Priority',
-            'failure_code': 'Fault Code',
-            'created_at': 'Created'
-        }
+        hide_index=True
     )
 
-def render_work_orders():
-    """Render work orders list with filtering"""
-    st.title("📋 Work Orders")
+def page_create_work_order():
+    """Page for technicians to create work orders"""
+    st.title("➕ Create Work Order")
     
-    df = load_work_orders()
+    user = st.session_state.current_user
     
-    if df.empty:
-        st.info("No work orders found. Generate demo data to get started.")
-        return
+    with st.form("create_wo_form", clear_on_submit=True):
+        st.subheader("📋 Basic Information")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Workshop selection (filtered by user's workshop if technician)
+            if user['Role'] == 'Technician':
+                workshop = st.text_input("Workshop", value=user['Workshop_Name'], disabled=True)
+            else:
+                workshops = st.session_state.df_workshop['Workshop_Name'].tolist()
+                workshop = st.selectbox("Workshop *", workshops)
+        
+        with col2:
+            # Vehicle selection
+            vehicles = st.session_state.df_vehicle['Vehicle_Number'].tolist()
+            vehicle_number = st.selectbox("Vehicle Number *", vehicles)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            received_date = st.date_input("Received Date *", datetime.now())
+        
+        with col2:
+            malfunction_date = st.date_input("Malfunction Date *", datetime.now())
+        
+        # Cascading failure selection
+        st.markdown("---")
+        st.subheader("🔧 Fault Classification")
+        st.caption("Select System → Subsystem → Component → Failure Mode")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            systems = get_cascading_options()
+            selected_system = st.selectbox("System *", [''] + systems)
+        
+        with col2:
+            subsystems = get_cascading_options(selected_system) if selected_system else []
+            selected_subsystem = st.selectbox("Subsystem *", [''] + subsystems)
+        
+        with col3:
+            components = get_cascading_options(selected_system, selected_subsystem) if selected_subsystem else []
+            selected_component = st.selectbox("Component *", [''] + components)
+        
+        with col4:
+            failure_modes = get_cascading_options(selected_system, selected_subsystem, selected_component) if selected_component else []
+            selected_failure = st.selectbox("Failure Mode *", [''] + failure_modes)
+        
+        # Auto-populated fields
+        failure_details = None
+        if selected_system and selected_subsystem and selected_component and selected_failure:
+            failure_details = get_failure_details(selected_system, selected_subsystem, selected_component, selected_failure)
+            
+            if failure_details:
+                st.markdown("---")
+                st.subheader("✨ Auto-Generated Codes")
+                st.success("Codes automatically generated from catalogue")
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.text_input("Failure Code", value=failure_details['Failure_Code'], disabled=True)
+                with col2:
+                    st.text_input("Cause Code", value=failure_details['Cause_Code'], disabled=True)
+                with col3:
+                    st.text_input("Resolution Code", value=failure_details['Resolution_Code'], disabled=True)
+                
+                st.markdown("**Recommended Action:**")
+                st.info(failure_details['Recommended_Action'])
+        
+        # Additional details
+        st.markdown("---")
+        st.subheader("📄 Additional Details")
+        
+        require_parts = st.checkbox("Require Spare Parts")
+        comments = st.text_area("Comments", height=100)
+        
+        # Submit
+        st.markdown("")
+        submitted = st.form_submit_button("🚀 Create Work Order", use_container_width=True, type="primary")
+        
+        if submitted:
+            if not vehicle_number or not selected_system or not selected_subsystem or not selected_component or not selected_failure:
+                st.error("Please complete all required fields")
+            elif not failure_details:
+                st.error("Invalid fault classification")
+            else:
+                # Get vehicle details
+                vehicle = st.session_state.df_vehicle[
+                    st.session_state.df_vehicle['Vehicle_Number'] == vehicle_number
+                ].iloc[0]
+                
+                # Create work order
+                wo_id = st.session_state.work_order_id_counter
+                mal_id = st.session_state.malfunction_id_counter
+                
+                new_wo = {
+                    'Work_Order_ID': wo_id,
+                    'Employee_ID': user['Employee_ID'],
+                    'Workshop_Name': workshop if user['Role'] != 'Technician' else user['Workshop_Name'],
+                    'Vehicle_Number': vehicle_number,
+                    'A_Received_Date': received_date.strftime('%Y-%m-%d'),
+                    'Equipment_Owning_Unit': vehicle['Unit_Name'],
+                    'Vehicle_Type': vehicle['Vehicle_Type'],
+                    'Malfunction_Date': malfunction_date.strftime('%Y-%m-%d'),
+                    'Work_Order_Date': datetime.now().strftime('%Y-%m-%d'),
+                    'Technician_Name': f"{user['Employee_First_Name']} {user['Employee_Last_Name']}",
+                    'Work_Order_Status': 'Open',
+                    'Require_Spare_Parts': require_parts,
+                    'Work_Order_Completion_Date': None,
+                    'Comments': comments
+                }
+                
+                new_malfunction = {
+                    'Malfunction_ID': mal_id,
+                    'Vehicle_Number': vehicle_number,
+                    'Work_Order_ID': wo_id,
+                    'Malfunction_Code': failure_details['Failure_Code'],
+                    'Resolution_Description_English': failure_details['Recommended_Action'],
+                    'Resolution_Description_Arabic': 'إجراء موصى به',
+                    'Root_Cause': failure_details['Failure_Mode'],
+                    'Cause_Code': failure_details['Cause_Code'],
+                    'Cause_Description_English': failure_details['Failure_Mode'],
+                    'Cause_Description_Arabic': 'وصف السبب',
+                    'Fault_Code': failure_details['Failure_Code']
+                }
+                
+                # Add to dataframes
+                st.session_state.df_work_orders = pd.concat([
+                    st.session_state.df_work_orders,
+                    pd.DataFrame([new_wo])
+                ], ignore_index=True)
+                
+                st.session_state.df_malfunction = pd.concat([
+                    st.session_state.df_malfunction,
+                    pd.DataFrame([new_malfunction])
+                ], ignore_index=True)
+                
+                # Increment counters
+                st.session_state.work_order_id_counter += 1
+                st.session_state.malfunction_id_counter += 1
+                
+                st.success(f"✅ Work Order **WO-{wo_id:05d}** created successfully!")
+                st.balloons()
+
+def page_my_work_orders():
+    """Page for technicians to view their work orders"""
+    st.title("📋 My Work Orders")
+    
+    user = st.session_state.current_user
+    
+    # Filter work orders by technician
+    df_wo = st.session_state.df_work_orders[
+        st.session_state.df_work_orders['Employee_ID'] == user['Employee_ID']
+    ].copy()
+    
+    # Filters
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        status_filter = st.selectbox("Filter by Status", ['All'] + ['Open', 'In Progress', 'Completed'])
+    
+    with col2:
+        vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+    
+    # Apply filters
+    if status_filter != 'All':
+        df_wo = df_wo[df_wo['Work_Order_Status'] == status_filter]
+    
+    if vehicle_filter != 'All':
+        df_wo = df_wo[df_wo['Vehicle_Number'] == vehicle_filter]
+    
+    st.info(f"Showing {len(df_wo)} work orders")
+    
+    # Display work orders
+    for idx, wo in df_wo.iterrows():
+        with st.expander(f"WO-{wo['Work_Order_ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"**Work Order ID:** WO-{wo['Work_Order_ID']:05d}")
+                st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
+                st.markdown(f"**Workshop:** {wo['Workshop_Name']}")
+                st.markdown(f"**Status:** {wo['Work_Order_Status']}")
+            
+            with col2:
+                st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
+                st.markdown(f"**WO Date:** {wo['Work_Order_Date']}")
+                st.markdown(f"**Require Parts:** {'Yes' if wo['Require_Spare_Parts'] else 'No'}")
+                if wo['Work_Order_Completion_Date']:
+                    st.markdown(f"**Completion Date:** {wo['Work_Order_Completion_Date']}")
+            
+            if wo['Comments']:
+                st.markdown("**Comments:**")
+                st.info(wo['Comments'])
+
+def page_supervisor_work_orders():
+    """Page for supervisors to manage work orders"""
+    st.title("📋 Workshop Work Orders")
+    
+    user = st.session_state.current_user
+    
+    # Filter by supervisor's workshop
+    df_wo = st.session_state.df_work_orders[
+        st.session_state.df_work_orders['Workshop_Name'] == user['Workshop_Name']
+    ].copy()
+    
+    # Filters
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        status_filter = st.selectbox("Filter by Status", ['All'] + ['Open', 'In Progress', 'Completed'])
+    
+    with col2:
+        vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+    
+    # Apply filters
+    if status_filter != 'All':
+        df_wo = df_wo[df_wo['Work_Order_Status'] == status_filter]
+    
+    if vehicle_filter != 'All':
+        df_wo = df_wo[df_wo['Vehicle_Number'] == vehicle_filter]
+    
+    st.info(f"Showing {len(df_wo)} work orders for {user['Workshop_Name']}")
+    
+    # Display work orders with edit capability
+    for idx, wo in df_wo.iterrows():
+        with st.expander(f"WO-{wo['Work_Order_ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"**Work Order ID:** WO-{wo['Work_Order_ID']:05d}")
+                st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
+                st.markdown(f"**Technician:** {wo['Technician_Name']}")
+                st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
+            
+            with col2:
+                # Editable status
+                new_status = st.selectbox(
+                    "Status",
+                    ['Open', 'In Progress', 'Completed'],
+                    index=['Open', 'In Progress', 'Completed'].index(wo['Work_Order_Status']),
+                    key=f"status_{wo['Work_Order_ID']}"
+                )
+                
+                if new_status == 'Completed':
+                    completion_date = st.date_input(
+                        "Completion Date",
+                        value=datetime.strptime(wo['Work_Order_Completion_Date'], '%Y-%m-%d') if wo['Work_Order_Completion_Date'] else datetime.now(),
+                        key=f"completion_{wo['Work_Order_ID']}"
+                    )
+                
+                new_comments = st.text_area(
+                    "Comments",
+                    value=wo['Comments'] if wo['Comments'] else '',
+                    key=f"comments_{wo['Work_Order_ID']}"
+                )
+            
+            # Update button
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("💾 Update", key=f"update_{wo['Work_Order_ID']}", use_container_width=True):
+                    # Update work order
+                    st.session_state.df_work_orders.loc[
+                        st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
+                        'Work_Order_Status'
+                    ] = new_status
+                    
+                    st.session_state.df_work_orders.loc[
+                        st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
+                        'Comments'
+                    ] = new_comments
+                    
+                    if new_status == 'Completed':
+                        st.session_state.df_work_orders.loc[
+                            st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
+                            'Work_Order_Completion_Date'
+                        ] = completion_date.strftime('%Y-%m-%d')
+                    
+                    st.success("Work order updated!")
+                    st.rerun()
+            
+            with col2:
+                if wo['Require_Spare_Parts'] and st.button("📦 Create Supply Request", key=f"supply_{wo['Work_Order_ID']}", use_container_width=True):
+                    st.session_state.selected_wo_for_supply = wo['Work_Order_ID']
+                    st.session_state.show_supply_form = True
+
+def page_manager_dashboard():
+    """Page for managers to view all sites"""
+    st.title("📊 Manager Dashboard - All Sites")
+    
+    df_wo = st.session_state.df_work_orders.copy()
     
     # Filters
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        systems = ['All'] + sorted(df['system'].unique().tolist())
-        selected_system = st.selectbox("System", systems)
+        regions = ['All'] + sorted(st.session_state.df_region['Region_Name'].tolist())
+        region_filter = st.selectbox("Region", regions)
     
     with col2:
-        statuses = ['All'] + sorted(df['status'].unique().tolist())
-        selected_status = st.selectbox("Status", statuses)
+        workshops = ['All'] + sorted(st.session_state.df_workshop['Workshop_Name'].tolist())
+        workshop_filter = st.selectbox("Workshop", workshops)
     
     with col3:
-        priorities = ['All'] + sorted(df['priority'].unique().tolist())
-        selected_priority = st.selectbox("Priority", priorities)
+        status_filter = st.selectbox("Status", ['All'] + ['Open', 'In Progress', 'Completed'])
     
     with col4:
-        vehicles = ['All'] + sorted(df['vehicle_id'].unique().tolist())
-        selected_vehicle = st.selectbox("Vehicle", vehicles)
+        systems = ['All'] + sorted(st.session_state.df_failure_catalogue['System'].unique().tolist())
+        system_filter = st.selectbox("System", systems)
     
     # Apply filters
-    filtered_df = df.copy()
-    if selected_system != 'All':
-        filtered_df = filtered_df[filtered_df['system'] == selected_system]
-    if selected_status != 'All':
-        filtered_df = filtered_df[filtered_df['status'] == selected_status]
-    if selected_priority != 'All':
-        filtered_df = filtered_df[filtered_df['priority'] == selected_priority]
-    if selected_vehicle != 'All':
-        filtered_df = filtered_df[filtered_df['vehicle_id'] == selected_vehicle]
+    if workshop_filter != 'All':
+        df_wo = df_wo[df_wo['Workshop_Name'] == workshop_filter]
+    elif region_filter != 'All':
+        workshops_in_region = st.session_state.df_workshop[
+            st.session_state.df_workshop['Region'] == region_filter
+        ]['Workshop_Name'].tolist()
+        df_wo = df_wo[df_wo['Workshop_Name'].isin(workshops_in_region)]
     
-    st.info(f"Showing {len(filtered_df):,} of {len(df):,} work orders")
+    if status_filter != 'All':
+        df_wo = df_wo[df_wo['Work_Order_Status'] == status_filter]
     
-    # Display work orders
-    display_cols = ['wo_id', 'vehicle_id', 'system', 'subsystem', 'component', 'failure_mode', 
-                    'failure_code', 'status', 'priority', 'labor_hours', 'parts_cost', 'created_at']
+    if system_filter != 'All':
+        # Get WO IDs with this system
+        mal_df = st.session_state.df_malfunction.merge(
+            st.session_state.df_failure_catalogue[['Failure_Code', 'System']],
+            left_on='Malfunction_Code',
+            right_on='Failure_Code',
+            how='left'
+        )
+        wo_ids = mal_df[mal_df['System'] == system_filter]['Work_Order_ID'].unique()
+        df_wo = df_wo[df_wo['Work_Order_ID'].isin(wo_ids)]
+    
+    # KPIs
+    st.markdown("---")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Total WOs", len(df_wo))
+    
+    with col2:
+        st.metric("Open", len(df_wo[df_wo['Work_Order_Status'] == 'Open']))
+    
+    with col3:
+        st.metric("In Progress", len(df_wo[df_wo['Work_Order_Status'] == 'In Progress']))
+    
+    with col4:
+        st.metric("Completed", len(df_wo[df_wo['Work_Order_Status'] == 'Completed']))
+    
+    with col5:
+        # Average completion time
+        completed = df_wo[df_wo['Work_Order_Status'] == 'Completed'].copy()
+        if not completed.empty and completed['Work_Order_Completion_Date'].notna().any():
+            completed['wo_date'] = pd.to_datetime(completed['Work_Order_Date'])
+            completed['completion_date'] = pd.to_datetime(completed['Work_Order_Completion_Date'])
+            completed['days'] = (completed['completion_date'] - completed['wo_date']).dt.days
+            avg_days = completed['days'].mean()
+            st.metric("Avg Days to Complete", f"{avg_days:.1f}")
+        else:
+            st.metric("Avg Days to Complete", "N/A")
+    
+    # Top failure modes
+    st.markdown("---")
+    st.subheader("Top 5 Failure Modes")
+    
+    mal_df = st.session_state.df_malfunction[
+        st.session_state.df_malfunction['Work_Order_ID'].isin(df_wo['Work_Order_ID'])
+    ]
+    
+    if not mal_df.empty:
+        top_failures = mal_df['Root_Cause'].value_counts().head(5)
+        st.bar_chart(top_failures)
+    else:
+        st.info("No data available")
+    
+    # Work orders table
+    st.markdown("---")
+    st.subheader("Work Orders")
+    
+    display_cols = ['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status',
+                   'Malfunction_Date', 'Technician_Name', 'Require_Spare_Parts']
     
     st.dataframe(
-        filtered_df[display_cols].sort_values('created_at', ascending=False),
+        df_wo[display_cols],
         use_container_width=True,
         hide_index=True,
         column_config={
-            'labor_hours': st.column_config.NumberColumn('Labor (hrs)', format="%.1f"),
-            'parts_cost': st.column_config.NumberColumn('Parts ($)', format="$%.0f")
+            'Work_Order_ID': 'WO ID',
+            'Vehicle_Number': 'Vehicle',
+            'Workshop_Name': 'Workshop',
+            'Work_Order_Status': 'Status',
+            'Malfunction_Date': 'Malfunction Date',
+            'Technician_Name': 'Technician',
+            'Require_Spare_Parts': 'Needs Parts'
         }
     )
 
-def render_new_work_order():
-    """Render new work order creation form"""
-    st.title("➕ Create New Work Order")
+def page_inventory():
+    """Page for inventory users"""
+    st.title("📦 Inventory Management")
     
-    st.info("💡 Use the cascading dropdowns to select the failure. Fault codes and recommended actions will be auto-populated.")
-    
-    with st.form("new_wo_form", clear_on_submit=True):
-        # Basic Info
-        st.subheader("📋 Basic Information")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            vehicle_id = st.text_input("🚗 Vehicle ID *", placeholder="VEH-0001", help="Enter the vehicle identification number")
-        
-        with col2:
-            failure_date = st.date_input("📅 Failure Date *", datetime.now(), help="When did the failure occur?")
-        
-        with col3:
-            priority = st.selectbox("⚠️ Priority *", ["Low", "Medium", "High", "Critical"], index=2, help="Select priority level")
-        
-        status = st.selectbox("📊 Status *", ["Open", "In Progress"], index=0, help="Current work order status")
-        
-        # Cascading Dropdowns
-        st.markdown("---")
-        st.subheader("🔧 Fault Classification")
-        st.caption("Select System → Subsystem → Component → Failure Mode (each selection filters the next)")
-        st.markdown("")  # Spacing
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            systems = get_systems()
-            selected_system = st.selectbox("🏗️ System *", systems, key="system_select", help="Select the vehicle system")
-        
-        with col2:
-            subsystems = get_subsystems(selected_system) if selected_system else []
-            selected_subsystem = st.selectbox(
-                "⚙️ Subsystem *", 
-                subsystems if subsystems else ["← Select System first"], 
-                disabled=not subsystems, 
-                key="subsystem_select",
-                help="Select the subsystem"
-            )
-        
-        with col3:
-            components = get_components(selected_system, selected_subsystem) if selected_system and selected_subsystem else []
-            selected_component = st.selectbox(
-                "🔩 Component *", 
-                components if components else ["← Select Subsystem first"],
-                disabled=not components, 
-                key="component_select",
-                help="Select the component"
-            )
-        
-        with col4:
-            failure_modes = get_failure_modes(selected_system, selected_subsystem, selected_component) if selected_component else []
-            selected_failure = st.selectbox(
-                "❌ Failure Mode *", 
-                failure_modes if failure_modes else ["← Select Component first"],
-                disabled=not failure_modes, 
-                key="failure_select",
-                help="Select the specific failure mode"
-            )
-        
-        # Get fault details
-        fault_details = None
-        if selected_system and selected_subsystem and selected_component and selected_failure:
-            fault_details = get_fault_details(selected_system, selected_subsystem, selected_component, selected_failure)
-        
-        # Auto-populated fields
-        if fault_details:
-            st.markdown("---")
-            st.subheader("✨ Auto-Generated Codes")
-            st.success("📌 Codes automatically generated from catalogue!")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.text_input("🔢 Failure Code", value=fault_details.get('failure_code', ''), disabled=True, 
-                             help="Automatically generated from catalogue")
-            with col2:
-                st.text_input("🔍 Cause Code", value=fault_details.get('cause_code', ''), disabled=True,
-                             help="Root cause classification code")
-            with col3:
-                st.text_input("✅ Resolution Code", value=fault_details.get('resolution_code', ''), disabled=True,
-                             help="Standard resolution procedure code")
-            
-            st.markdown("**📝 Recommended Action:**")
-            st.info(fault_details.get('recommended_action', 'No action specified'))
-        
-        # Additional Details
-        st.markdown("---")
-        st.subheader("📄 Additional Details")
-        description = st.text_area("Description", placeholder="Describe the failure in detail...", height=100,
-                                   help="Provide detailed information about the failure")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            labor_hours = st.number_input("⏱️ Estimated Labor Hours", min_value=0.0, step=0.5, value=2.0,
-                                         help="Estimated time to complete repair")
-        with col2:
-            parts_cost = st.number_input("💰 Estimated Parts Cost ($)", min_value=0.0, step=50.0, value=500.0,
-                                        help="Estimated cost of replacement parts")
-        
-        st.markdown("")  # Spacing
-        
-        # Submit
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            submitted = st.form_submit_button("🚀 Create Work Order", use_container_width=True, type="primary")
-        
-        if submitted:
-            # Validation
-            if not vehicle_id:
-                st.error("❌ Vehicle ID is required")
-            elif not selected_system or not selected_subsystem or not selected_component or not selected_failure:
-                st.error("❌ Please complete all fault classification fields (System → Subsystem → Component → Failure Mode)")
-            elif not fault_details:
-                st.error("❌ Invalid fault classification selection")
-            else:
-                # Generate WO ID
-                wo_id = f"WO-{datetime.now().year}-{random.randint(10000, 99999)}"
-                
-                # Create work order data
-                wo_data = {
-                    'wo_id': wo_id,
-                    'vehicle_id': vehicle_id,
-                    'system': selected_system,
-                    'subsystem': selected_subsystem,
-                    'component': selected_component,
-                    'failure_mode': selected_failure,
-                    'failure_code': fault_details.get('failure_code', ''),
-                    'cause_code': fault_details.get('cause_code', ''),
-                    'resolution_code': fault_details.get('resolution_code', ''),
-                    'recommended_action': fault_details.get('recommended_action', ''),
-                    'failure_date': failure_date.strftime('%Y-%m-%d'),
-                    'reported_by': st.session_state.current_user,
-                    'status': status,
-                    'priority': priority,
-                    'labor_hours': labor_hours,
-                    'parts_cost': parts_cost,
-                    'description': description,
-                    'resolution_notes': '',
-                    'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'completed_at': None
-                }
-                
-                # Save to database
-                if save_work_order(wo_data):
-                    st.success(f"✅ Work Order **{wo_id}** created successfully!")
-                    st.balloons()
-                    
-                    # Show summary
-                    with st.expander("📋 Work Order Summary", expanded=True):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**Work Order ID:** `{wo_id}`")
-                            st.markdown(f"**Vehicle:** {vehicle_id}")
-                            st.markdown(f"**System:** {selected_system}")
-                            st.markdown(f"**Subsystem:** {selected_subsystem}")
-                            st.markdown(f"**Component:** {selected_component}")
-                            st.markdown(f"**Failure Mode:** {selected_failure}")
-                        with col2:
-                            st.markdown(f"**Failure Code:** `{fault_details.get('failure_code', '')}`")
-                            st.markdown(f"**Cause Code:** `{fault_details.get('cause_code', '')}`")
-                            st.markdown(f"**Resolution Code:** `{fault_details.get('resolution_code', '')}`")
-                            st.markdown(f"**Priority:** {priority}")
-                            st.markdown(f"**Status:** {status}")
-                            st.markdown(f"**Est. Cost:** ${parts_cost + (labor_hours * 85):,.2f}")
-                        
-                        st.markdown("---")
-                        st.markdown("**📝 Recommended Action:**")
-                        st.info(fault_details.get('recommended_action', 'N/A'))
-                else:
-                    st.error("❌ Failed to create work order")
-    
-    # Help section after form
-    with st.expander("ℹ️ Need Help?"):
-        st.markdown("""
-        **How to create a work order:**
-        1. Enter the vehicle ID and select priority/status
-        2. Use the cascading dropdowns to select the fault (they filter automatically)
-        3. Review the auto-generated codes and recommended action
-        4. Add a description and cost estimates
-        5. Click 'Create Work Order'
-        
-        **Tips:**
-        - Each dropdown filters the next one
-        - Fault codes are automatically generated
-        - All fields marked with * are required
-        """)
-
-def render_analytics():
-    """Render advanced analytics"""
-    st.title("📈 Analytics & Insights")
-    
-    df = load_work_orders()
-    
-    if df.empty:
-        st.info("No data available for analytics. Generate demo data first.")
-        return
-    
-    # Tabs for different analytics
-    tab1, tab2, tab3, tab4 = st.tabs(["System Analysis", "Cost Analysis", "Performance Metrics", "Trends"])
+    tab1, tab2, tab3 = st.tabs(["Supply Requests", "Parts Inventory", "Update Quantity"])
     
     with tab1:
-        st.subheader("System Reliability Analysis")
+        st.subheader("Supply Requests")
         
-        system_stats = df.groupby('system').agg({
-            'wo_id': 'count',
-            'labor_hours': 'sum',
-            'parts_cost': 'sum'
-        }).reset_index()
-        system_stats.columns = ['System', 'Failure Count', 'Total Labor Hours', 'Total Parts Cost']
-        system_stats['Total Cost'] = system_stats['Total Labor Hours'] * 85 + system_stats['Total Parts Cost']
-        system_stats = system_stats.sort_values('Failure Count', ascending=False)
+        df_sr = st.session_state.df_supply_request.copy()
+        
+        # Merge with work orders and parts
+        df_sr = df_sr.merge(
+            st.session_state.df_work_orders[['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name']],
+            on='Work_Order_ID',
+            how='left'
+        )
+        
+        df_sr = df_sr.merge(
+            st.session_state.df_part[['Part_ID', 'Part_Number', 'English_Description']],
+            on='Part_ID',
+            how='left'
+        )
         
         st.dataframe(
-            system_stats,
+            df_sr,
             use_container_width=True,
             hide_index=True,
             column_config={
-                'Total Labor Hours': st.column_config.NumberColumn(format="%.1f hrs"),
-                'Total Parts Cost': st.column_config.NumberColumn(format="$%.0f"),
-                'Total Cost': st.column_config.NumberColumn(format="$%.0f")
+                'Supply_Request_ID': 'SR ID',
+                'Work_Order_ID': 'WO ID',
+                'Vehicle_Number': 'Vehicle',
+                'Workshop_Name': 'Workshop',
+                'Part_Number': 'Part Number',
+                'English_Description': 'Description',
+                'Quantity_Requested': 'Qty',
+                'Status': 'Status'
             }
         )
         
-        # Chart
-        chart = alt.Chart(system_stats.head(10)).mark_bar().encode(
-            x=alt.X('Failure Count:Q'),
-            y=alt.Y('System:N', sort='-x'),
-            color=alt.value('#3B82F6'),
-            tooltip=['System', 'Failure Count', alt.Tooltip('Total Cost:Q', format='$,.0f')]
-        ).properties(height=400)
+        # Update status
+        st.markdown("---")
+        st.subheader("Update Supply Request Status")
         
-        st.altair_chart(chart, use_container_width=True)
+        sr_id = st.number_input("Supply Request ID", min_value=1, step=1)
+        new_status = st.selectbox("New Status", ['Pending', 'Approved', 'Issued', 'Cancelled'])
+        
+        if st.button("Update Status", type="primary"):
+            if sr_id in st.session_state.df_supply_request['Supply_Request_ID'].values:
+                st.session_state.df_supply_request.loc[
+                    st.session_state.df_supply_request['Supply_Request_ID'] == sr_id,
+                    'Status'
+                ] = new_status
+                st.success(f"Supply Request {sr_id} updated to {new_status}")
+                st.rerun()
+            else:
+                st.error("Supply Request ID not found")
     
     with tab2:
-        st.subheader("Cost Breakdown")
+        st.subheader("Parts Inventory")
         
-        col1, col2, col3, col4 = st.columns(4)
-        
-        total_parts = df['parts_cost'].sum()
-        total_labor = df['labor_hours'].sum() * 85
-        total_cost = total_parts + total_labor
-        avg_cost_per_wo = total_cost / len(df) if len(df) > 0 else 0
-        
-        with col1:
-            st.metric("Total Parts Cost", f"${total_parts:,.0f}")
-        with col2:
-            st.metric("Total Labor Cost", f"${total_labor:,.0f}")
-        with col3:
-            st.metric("Total Cost", f"${total_cost:,.0f}")
-        with col4:
-            st.metric("Avg Cost/WO", f"${avg_cost_per_wo:,.0f}")
-        
-        # Cost by system
-        st.markdown("---")
-        st.subheader("Cost by System")
-        
-        cost_by_system = df.groupby('system').agg({
-            'parts_cost': 'sum',
-            'labor_hours': 'sum'
-        }).reset_index()
-        cost_by_system['labor_cost'] = cost_by_system['labor_hours'] * 85
-        cost_by_system['total_cost'] = cost_by_system['parts_cost'] + cost_by_system['labor_cost']
-        cost_by_system = cost_by_system.sort_values('total_cost', ascending=False).head(10)
-        
-        chart = alt.Chart(cost_by_system).mark_bar().encode(
-            x=alt.X('total_cost:Q', title='Total Cost ($)'),
-            y=alt.Y('system:N', sort='-x', title='System'),
-            color=alt.value('#10B981'),
-            tooltip=[
-                'system',
-                alt.Tooltip('total_cost:Q', format='$,.0f', title='Total Cost'),
-                alt.Tooltip('parts_cost:Q', format='$,.0f', title='Parts'),
-                alt.Tooltip('labor_cost:Q', format='$,.0f', title='Labor')
-            ]
-        ).properties(height=400)
-        
-        st.altair_chart(chart, use_container_width=True)
+        st.dataframe(
+            st.session_state.df_part,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'Part_Quantity': st.column_config.NumberColumn('Quantity', format="%d")
+            }
+        )
     
     with tab3:
-        st.subheader("Performance Metrics")
-        
-        # MTTR calculation
-        completed_df = df[df['status'] == 'Completed'].copy()
-        if not completed_df.empty and 'completed_at' in completed_df.columns:
-            completed_df['failure_date'] = pd.to_datetime(completed_df['failure_date'])
-            completed_df['completed_at'] = pd.to_datetime(completed_df['completed_at'])
-            completed_df['repair_time'] = (completed_df['completed_at'] - completed_df['failure_date']).dt.days
-            
-            avg_mttr = completed_df['repair_time'].mean()
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Avg MTTR (Days)", f"{avg_mttr:.1f}")
-            with col2:
-                completion_rate = (len(completed_df) / len(df) * 100) if len(df) > 0 else 0
-                st.metric("Completion Rate", f"{completion_rate:.1f}%")
-            with col3:
-                open_wos = len(df[df['status'].isin(['Open', 'In Progress'])])
-                st.metric("Open Work Orders", open_wos)
-        
-        # Top failure modes
-        st.markdown("---")
-        st.subheader("Top 10 Failure Modes")
-        
-        failure_counts = df['failure_mode'].value_counts().head(10).reset_index()
-        failure_counts.columns = ['Failure Mode', 'Count']
-        
-        chart = alt.Chart(failure_counts).mark_bar().encode(
-            x=alt.X('Count:Q'),
-            y=alt.Y('Failure Mode:N', sort='-x'),
-            color=alt.value('#F59E0B'),
-            tooltip=['Failure Mode', 'Count']
-        ).properties(height=400)
-        
-        st.altair_chart(chart, use_container_width=True)
-    
-    with tab4:
-        st.subheader("Trends Over Time")
-        st.info("📊 Time-based trend analysis requires date filtering - coming in full version")
-        
-        # Monthly trend
-        df_trend = df.copy()
-        df_trend['failure_date'] = pd.to_datetime(df_trend['failure_date'])
-        df_trend['month'] = df_trend['failure_date'].dt.to_period('M').astype(str)
-        
-        monthly = df_trend.groupby('month').size().reset_index(name='count')
-        
-        if len(monthly) > 1:
-            chart = alt.Chart(monthly).mark_line(point=True).encode(
-                x=alt.X('month:N', title='Month'),
-                y=alt.Y('count:Q', title='Work Orders'),
-                tooltip=['month', 'count']
-            ).properties(height=300)
-            
-            st.altair_chart(chart, use_container_width=True)
-
-def render_data_management():
-    """Render data management tools"""
-    st.title("⚙️ Data Management")
-    
-    tab1, tab2, tab3 = st.tabs(["Export Data", "Generate Demo Data", "Database Info"])
-    
-    with tab1:
-        st.subheader("Export Data")
-        df = load_work_orders()
-        
-        if not df.empty:
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Work Orders (CSV)",
-                data=csv,
-                file_name=f"work_orders_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-            
-            st.info(f"Ready to export {len(df)} work orders")
-        else:
-            st.warning("No data to export")
-    
-    with tab2:
-        st.subheader("Generate Demo Data")
-        st.write("Generate realistic demo work orders for testing and demonstration.")
+        st.subheader("Update Part Quantity")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            n_records = st.number_input("Number of Records", min_value=10, max_value=5000, value=100, step=10)
+            part_id = st.selectbox(
+                "Select Part",
+                st.session_state.df_part['Part_ID'].tolist(),
+                format_func=lambda x: f"{st.session_state.df_part[st.session_state.df_part['Part_ID']==x]['Part_Number'].iloc[0]} - {st.session_state.df_part[st.session_state.df_part['Part_ID']==x]['English_Description'].iloc[0]}"
+            )
         
         with col2:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            if st.button("🎲 Generate Demo Data", use_container_width=True, type="primary"):
-                with st.spinner(f"Generating {n_records} work orders..."):
-                    n = generate_demo_data(n_records)
-                    st.success(f"✅ Successfully generated {n} work orders!")
-                    st.balloons()
+            current_qty = st.session_state.df_part[st.session_state.df_part['Part_ID']==part_id]['Part_Quantity'].iloc[0]
+            st.metric("Current Quantity", current_qty)
         
-        st.info("💡 Demo data includes realistic vehicle IDs, failure modes from the catalogue, and varied statuses/priorities.")
+        new_qty = st.number_input("New Quantity", min_value=0, value=int(current_qty))
+        
+        if st.button("Update Quantity", type="primary"):
+            st.session_state.df_part.loc[
+                st.session_state.df_part['Part_ID'] == part_id,
+                'Part_Quantity'
+            ] = new_qty
+            st.success(f"Part {part_id} quantity updated to {new_qty}")
+            st.rerun()
+
+def page_procurement():
+    """Page for procurement users"""
+    st.title("💼 Procurement")
+    
+    tab1, tab2, tab3 = st.tabs(["Supply Requests", "Create PR", "Orders"])
+    
+    with tab1:
+        st.subheader("Supply Requests Requiring Purchase")
+        
+        df_sr = st.session_state.df_supply_request[
+            st.session_state.df_supply_request['Status'] == 'Approved'
+        ].copy()
+        
+        # Merge with parts
+        df_sr = df_sr.merge(
+            st.session_state.df_part[['Part_ID', 'Part_Number', 'English_Description', 'Part_Quantity']],
+            on='Part_ID',
+            how='left'
+        )
+        
+        # Show only those needing purchase (quantity < requested)
+        df_sr['Needs_Purchase'] = df_sr['Part_Quantity'] < df_sr['Quantity_Requested']
+        df_sr = df_sr[df_sr['Needs_Purchase']]
+        
+        st.dataframe(
+            df_sr[['Supply_Request_ID', 'Part_Number', 'English_Description', 
+                  'Quantity_Requested', 'Part_Quantity']],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'Supply_Request_ID': 'SR ID',
+                'Part_Number': 'Part Number',
+                'English_Description': 'Description',
+                'Quantity_Requested': 'Qty Needed',
+                'Part_Quantity': 'In Stock'
+            }
+        )
+    
+    with tab2:
+        st.subheader("Create Purchase Request")
+        
+        user = st.session_state.current_user
+        
+        with st.form("create_pr_form"):
+            supply_request_id = st.number_input("Supply Request ID", min_value=1, step=1)
+            
+            submitted = st.form_submit_button("Create PR", type="primary")
+            
+            if submitted:
+                if supply_request_id in st.session_state.df_supply_request['Supply_Request_ID'].values:
+                    pr_id = st.session_state.purchase_request_id_counter
+                    
+                    new_pr = {
+                        'PR_ID': pr_id,
+                        'Supply_Request_ID': supply_request_id,
+                        'Employee_ID': user['Employee_ID'],
+                        'PR_Date': datetime.now().strftime('%Y-%m-%d'),
+                        'Status': 'Pending'
+                    }
+                    
+                    st.session_state.df_purchase_request = pd.concat([
+                        st.session_state.df_purchase_request,
+                        pd.DataFrame([new_pr])
+                    ], ignore_index=True)
+                    
+                    st.session_state.purchase_request_id_counter += 1
+                    
+                    st.success(f"Purchase Request PR-{pr_id:05d} created!")
+                else:
+                    st.error("Supply Request ID not found")
     
     with tab3:
-        st.subheader("Database Information")
-        df = load_work_orders()
+        st.subheader("Purchase Orders")
         
-        col1, col2, col3 = st.columns(3)
+        st.dataframe(
+            st.session_state.df_orders,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'PO_ID': 'PO ID',
+                'Order_Status': 'Status',
+                'Order_Date': 'Order Date',
+                'Delivery_Date': 'Delivery Date',
+                'Warehouse_Status': 'Warehouse Status'
+            }
+        )
+
+def page_admin_catalogue():
+    """Page for admin to manage failure catalogue"""
+    st.title("⚙️ Failure Catalogue Management")
+    
+    tab1, tab2 = st.tabs(["View Catalogue", "Add Entry"])
+    
+    with tab1:
+        st.subheader("Current Failure Catalogue")
         
-        with col1:
-            st.metric("Total Records", f"{len(df):,}")
+        st.dataframe(
+            st.session_state.df_failure_catalogue,
+            use_container_width=True,
+            hide_index=True
+        )
+    
+    with tab2:
+        st.subheader("Add New Catalogue Entry")
         
-        with col2:
-            if not df.empty:
-                size_mb = df.memory_usage(deep=True).sum() / 1024 / 1024
-                st.metric("Data Size", f"{size_mb:.2f} MB")
-        
-        with col3:
-            systems_count = len(df['system'].unique()) if not df.empty else 0
-            st.metric("Systems Tracked", systems_count)
-        
-        if not df.empty:
-            st.markdown("---")
-            st.subheader("Data Quality Metrics")
-            
-            col1, col2, col3, col4 = st.columns(4)
+        with st.form("add_catalogue_form"):
+            col1, col2 = st.columns(2)
             
             with col1:
-                complete = df[['failure_code', 'cause_code', 'resolution_code']].notna().all(axis=1).sum()
-                completeness = (complete / len(df) * 100) if len(df) > 0 else 0
-                st.metric("Data Completeness", f"{completeness:.1f}%")
+                system = st.text_input("System *")
+                subsystem = st.text_input("Subsystem *")
+                component = st.text_input("Component *")
+                failure_mode = st.text_input("Failure Mode *")
             
             with col2:
-                has_action = df['recommended_action'].notna().sum()
-                action_rate = (has_action / len(df) * 100) if len(df) > 0 else 0
-                st.metric("Has Rec. Action", f"{action_rate:.1f}%")
+                failure_code = st.text_input("Failure Code *")
+                cause_code = st.text_input("Cause Code *")
+                resolution_code = st.text_input("Resolution Code *")
             
-            with col3:
-                vehicles = df['vehicle_id'].nunique()
-                st.metric("Unique Vehicles", vehicles)
+            recommended_action = st.text_area("Recommended Action *", height=100)
             
-            with col4:
-                techs = df['reported_by'].nunique()
-                st.metric("Technicians", techs)
+            submitted = st.form_submit_button("Add to Catalogue", type="primary")
+            
+            if submitted:
+                if all([system, subsystem, component, failure_mode, failure_code, 
+                       cause_code, resolution_code, recommended_action]):
+                    
+                    new_entry = {
+                        'System': system,
+                        'Subsystem': subsystem,
+                        'Component': component,
+                        'Failure_Mode': failure_mode,
+                        'Failure_Code': failure_code,
+                        'Cause_Code': cause_code,
+                        'Resolution_Code': resolution_code,
+                        'Recommended_Action': recommended_action
+                    }
+                    
+                    st.session_state.df_failure_catalogue = pd.concat([
+                        st.session_state.df_failure_catalogue,
+                        pd.DataFrame([new_entry])
+                    ], ignore_index=True)
+                    
+                    st.success("✅ Catalogue entry added successfully!")
+                    st.balloons()
+                else:
+                    st.error("Please fill in all required fields")
+
+def page_admin_users():
+    """Page for admin to view users"""
+    st.title("👥 User Management")
+    
+    st.dataframe(
+        st.session_state.df_user[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name', 
+                                  'Job_Title', 'Department_Code', 'Role', 'Username']],
+        use_container_width=True,
+        hide_index=True
+    )
+
+# ============================================================================
+# SIDEBAR NAVIGATION
+# ============================================================================
+
+def render_sidebar():
+    """Render sidebar navigation based on user role"""
+    
+    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+        return None
+    
+    user = st.session_state.current_user
+    
+    with st.sidebar:
+        st.title("🔧 AMIC MMS")
+        st.caption("Work Order Management")
+        
+        st.markdown("---")
+        
+        st.write(f"**{user['Employee_First_Name']} {user['Employee_Last_Name']}**")
+        st.caption(f"Role: {user['Role']}")
+        if user['Workshop_Name']:
+            st.caption(f"Workshop: {user['Workshop_Name']}")
+        
+        st.markdown("---")
+        
+        # Role-based navigation
+        pages = {
+            'Dashboard': 'dashboard'
+        }
+        
+        if user['Role'] == 'Technician':
+            pages['Create Work Order'] = 'create_wo'
+            pages['My Work Orders'] = 'my_wo'
+        
+        elif user['Role'] == 'Supervisor':
+            pages['Create Work Order'] = 'create_wo'
+            pages['Workshop Work Orders'] = 'supervisor_wo'
+        
+        elif user['Role'] == 'Manager':
+            pages['Manager Dashboard'] = 'manager'
+        
+        elif user['Role'] == 'Inventory':
+            pages['Inventory'] = 'inventory'
+        
+        elif user['Role'] == 'Procurement':
+            pages['Procurement'] = 'procurement'
+        
+        elif user['Role'] == 'Admin':
+            pages['Failure Catalogue'] = 'catalogue'
+            pages['Users'] = 'users'
+        
+        selected = st.radio("Navigation", list(pages.keys()))
+        
+        st.markdown("---")
+        
+        if st.button("🚪 Logout", use_container_width=True):
+            logout()
+        
+        return pages[selected]
 
 # ============================================================================
 # MAIN APPLICATION
@@ -1299,24 +1278,39 @@ def render_data_management():
 def main():
     """Main application entry point"""
     
-    # Initialize database
-    if not st.session_state.app_initialized:
-        get_db_engine()
+    # Initialize data
+    init_data()
     
-    # Render sidebar and get menu selection
-    menu = render_sidebar()
+    # Check if logged in
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    
+    if not st.session_state.logged_in:
+        login_page()
+        return
+    
+    # Render sidebar and get selected page
+    page = render_sidebar()
     
     # Route to appropriate page
-    if menu == "Dashboard":
-        render_dashboard()
-    elif menu == "Work Orders":
-        render_work_orders()
-    elif menu == "New Work Order":
-        render_new_work_order()
-    elif menu == "Analytics":
-        render_analytics()
-    elif menu == "Data Management":
-        render_data_management()
+    if page == 'dashboard':
+        page_dashboard()
+    elif page == 'create_wo':
+        page_create_work_order()
+    elif page == 'my_wo':
+        page_my_work_orders()
+    elif page == 'supervisor_wo':
+        page_supervisor_work_orders()
+    elif page == 'manager':
+        page_manager_dashboard()
+    elif page == 'inventory':
+        page_inventory()
+    elif page == 'procurement':
+        page_procurement()
+    elif page == 'catalogue':
+        page_admin_catalogue()
+    elif page == 'users':
+        page_admin_users()
 
 if __name__ == "__main__":
     main()
