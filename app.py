@@ -10,6 +10,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import hashlib
+import sys
+sys.path.insert(0, '/mnt/user-data/outputs')
+
+try:
+    from failure_catalogue_data import get_catalogue_dataframe
+    CATALOGUE_AVAILABLE = True
+except:
+    CATALOGUE_AVAILABLE = False
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -152,32 +160,23 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
 # ============================================================================
 
 def load_failure_catalogue_from_excel():
-    """Load the complete 427-entry failure catalogue from Excel"""
-    try:
-        file_path = '/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx'
-        df = pd.read_excel(file_path, sheet_name='FRACAS_FailureMode_Catalogue')
-        
-        # Clean up column names and data
-        df.columns = df.columns.str.strip()
-        
-        # Handle any NaN values in codes
-        df['Failure Code'] = df['Failure Code'].fillna('UNKNOWN')
-        df['Cause Code'] = df['Cause Code'].fillna('UNKNOWN')
-        df['Resolution Code'] = df['Resolution Code'].fillna('UNKNOWN')
-        
-        print(f"✓ Loaded {len(df)} failure modes from Excel")
-        print(f"✓ Systems: {df['System'].nunique()}")
-        print(f"✓ Subsystems: {df['Subsystem'].nunique()}")
-        print(f"✓ Components: {df['Component'].nunique()}")
-        
-        return df
-    except Exception as e:
-        print(f"Error loading Excel: {e}")
-        # Return empty dataframe with correct structure if file can't be loaded
-        return pd.DataFrame(columns=[
-            'System', 'Subsystem', 'Component', 'Failure Mode', 
-            'Recommended Action', 'Failure Code', 'Cause Code', 'Resolution Code'
-        ])
+    """Load the complete 427-entry failure catalogue"""
+    if CATALOGUE_AVAILABLE:
+        try:
+            df = get_catalogue_dataframe()
+            print(f"✓ Loaded {len(df)} failure modes from embedded data")
+            print(f"✓ Systems: {df['System'].nunique()}")
+            print(f"✓ Subsystems: {df['Subsystem'].nunique()}")
+            print(f"✓ Components: {df['Component'].nunique()}")
+            return df
+        except Exception as e:
+            print(f"Error loading embedded data: {e}")
+    
+    # Return empty dataframe if loading fails
+    return pd.DataFrame(columns=[
+        'System', 'Subsystem', 'Component', 'Failure Mode', 
+        'Recommended Action', 'Failure Code', 'Cause Code', 'Resolution Code'
+    ])
 
 def generate_bom_for_failure(failure_code, failure_mode, component, recommended_action):
     """Generate Bill of Materials based on failure mode"""
@@ -428,12 +427,22 @@ def role_selection_page():
     st.markdown("### Select Your Role")
     
     # Show catalogue loading status
-    try:
-        df_test = pd.read_excel('/mnt/user-data/uploads/FRACAS_FailureMode_Catalogue_v5_WithCodes.xlsx', 
-                               sheet_name='FRACAS_FailureMode_Catalogue')
-        st.success(f"✅ Excel File Found: {len(df_test)} failure modes ready to load")
-    except Exception as e:
-        st.error(f"⚠️ Could not read Excel file: {e}")
+    if CATALOGUE_AVAILABLE:
+        try:
+            df_test = get_catalogue_dataframe()
+            st.success(f"✅ Failure Catalogue Loaded: {len(df_test)} failure modes ready")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Systems", df_test['System'].nunique())
+            with col2:
+                st.metric("Subsystems", df_test['Subsystem'].nunique())
+            with col3:
+                st.metric("Components", df_test['Component'].nunique())
+        except Exception as e:
+            st.error(f"⚠️ Could not load catalogue: {e}")
+    else:
+        st.error("⚠️ Failure catalogue not available")
     
     st.markdown("---")
     
