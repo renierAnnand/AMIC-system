@@ -1,6 +1,6 @@
 """
 AMIC Maintenance Management System (MMS) - Phase 1 Work Order Module
-Complete Demo Application with Full ERD Implementation
+Complete Demo Application - ERD Compliant with Fixed Dropdown Visibility
 """
 
 import streamlit as st
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# STYLING - WHITE THEME
+# STYLING - WHITE THEME WITH VISIBLE DROPDOWNS
 # ============================================================================
 st.markdown("""
 <style>
@@ -54,6 +54,55 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
     background-color: #FFFFFF !important;
     color: #111827 !important;
     border: 1px solid #D1D5DB !important;
+}
+
+/* CRITICAL FIX: Dropdown menus visibility */
+[data-baseweb="select"] {
+    background-color: #FFFFFF !important;
+}
+
+[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+}
+
+/* Dropdown options list container */
+[data-baseweb="popover"] {
+    background-color: #FFFFFF !important;
+}
+
+[data-baseweb="menu"] {
+    background-color: #FFFFFF !important;
+}
+
+[data-baseweb="menu"] ul {
+    background-color: #FFFFFF !important;
+}
+
+/* Individual dropdown option items */
+[role="option"] {
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+}
+
+[role="option"]:hover {
+    background-color: #F3F4F6 !important;
+    color: #111827 !important;
+}
+
+/* Selected option in dropdown */
+[aria-selected="true"] {
+    background-color: #DBEAFE !important;
+    color: #1E40AF !important;
+}
+
+/* Selectbox text */
+.stSelectbox label {
+    color: #111827 !important;
+}
+
+.stSelectbox div[data-baseweb="select"] > div {
+    color: #111827 !important;
 }
 
 /* Buttons */
@@ -98,6 +147,11 @@ h1, h2, h3, h4, h5, h6, p, span, div, label {
     background-color: #FEF3C7 !important;
     color: #78350F !important;
 }
+
+.stError {
+    background-color: #FEE2E2 !important;
+    color: #991B1B !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -126,17 +180,9 @@ def init_data():
         'Department_Supervisor': ['Ahmed Al-Rashid', 'Fatima Al-Qasim', 'Mohammed Al-Harbi', 'Khalid Al-Mansour', 'Sara Al-Fahad']
     })
     
-    # Region
+    # Region (just region name as PK per ERD)
     st.session_state.df_region = pd.DataFrame({
-        'Region_ID': [1, 2, 3, 4, 5],
-        'Region_Name': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
-    })
-    
-    # Workshop
-    st.session_state.df_workshop = pd.DataFrame({
-        'Workshop_Name': ['Workshop Alpha', 'Workshop Beta', 'Workshop Gamma', 'Workshop Delta', 'Workshop Epsilon'],
-        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern'],
-        'Unit_Name': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105']
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
     })
     
     # Unit
@@ -144,6 +190,13 @@ def init_data():
         'Unit_Name': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105'],
         'Workshop_Name': ['Workshop Alpha', 'Workshop Beta', 'Workshop Gamma', 'Workshop Delta', 'Workshop Epsilon'],
         'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
+    })
+    
+    # Workshop
+    st.session_state.df_workshop = pd.DataFrame({
+        'Workshop_Name': ['Workshop Alpha', 'Workshop Beta', 'Workshop Gamma', 'Workshop Delta', 'Workshop Epsilon'],
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern'],
+        'Unit_Name': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105']
     })
     
     # Battalion
@@ -154,7 +207,7 @@ def init_data():
     })
     
     # ========================================================================
-    # USERS
+    # USERS (Main User table)
     # ========================================================================
     
     st.session_state.df_user = pd.DataFrame({
@@ -163,14 +216,46 @@ def init_data():
         'Employee_First_Name': ['Ali', 'Omar', 'Yousef', 'Layla', 'Hassan', 'Nora', 'Tariq', 'Admin'],
         'Employee_Last_Name': ['Al-Saud', 'Al-Harbi', 'Al-Qahtani', 'Al-Otaibi', 'Al-Shammari', 'Al-Dosari', 'Al-Mutairi', 'User'],
         'Job_Title': ['Technician', 'Supervisor', 'Technician', 'Inventory Specialist', 'Procurement Officer', 'Manager', 'Supervisor', 'System Admin'],
-        'Resource_ID': ['RES001', 'RES002', 'RES003', 'RES004', 'RES005', 'RES006', 'RES007', 'RES008'],
-        'Username': ['ali.tech', 'omar.super', 'yousef.tech', 'layla.inv', 'hassan.proc', 'nora.mgr', 'tariq.super', 'admin'],
-        'Password': [hash_password('tech123'), hash_password('super123'), hash_password('tech123'), 
-                    hash_password('inv123'), hash_password('proc123'), hash_password('mgr123'), 
-                    hash_password('super123'), hash_password('admin123')],
-        'Role': ['Technician', 'Supervisor', 'Technician', 'Inventory', 'Procurement', 'Manager', 'Supervisor', 'Admin'],
-        'Workshop_Name': ['Workshop Alpha', 'Workshop Alpha', 'Workshop Beta', None, None, None, 'Workshop Beta', None],
-        'Region': ['Central', 'Central', 'Eastern', None, None, None, 'Eastern', None]
+        'Resource_ID': ['RES001', 'RES002', 'RES003', 'RES004', 'RES005', 'RES006', 'RES007', 'RES008']
+    })
+    
+    # ========================================================================
+    # ROLE-SPECIFIC USER TABLES (per ERD)
+    # ========================================================================
+    
+    # TechnicalUser
+    st.session_state.df_technical_user = pd.DataFrame({
+        'ID': [1, 2],
+        'Employee_ID': [1, 3],  # Ali and Yousef
+        'Username': ['ali.tech', 'yousef.tech'],
+        'Password': [hash_password('tech123'), hash_password('tech123')],
+        'Workshop_Name': ['Workshop Alpha', 'Workshop Beta']
+    })
+    
+    # InventoryUser
+    st.session_state.df_inventory_user = pd.DataFrame({
+        'ID': [1],
+        'Employee_ID': [4],  # Layla
+        'Username': ['layla.inv'],
+        'Password': [hash_password('inv123')]
+    })
+    
+    # ProcurementUser
+    st.session_state.df_procurement_user = pd.DataFrame({
+        'ID': [1],
+        'Employee_ID': [5],  # Hassan
+        'Username': ['hassan.proc'],
+        'Password': [hash_password('proc123')]
+    })
+    
+    # For demo purposes, add supervisor, manager, and admin (not in ERD but needed for app)
+    st.session_state.df_other_users = pd.DataFrame({
+        'ID': [1, 2, 3],
+        'Employee_ID': [2, 6, 8],  # Omar (Supervisor), Nora (Manager), Admin
+        'Username': ['omar.super', 'nora.mgr', 'admin'],
+        'Password': [hash_password('super123'), hash_password('mgr123'), hash_password('admin123')],
+        'Role': ['Supervisor', 'Manager', 'Admin'],
+        'Workshop_Name': ['Workshop Alpha', None, None]
     })
     
     # ========================================================================
@@ -224,7 +309,7 @@ def init_data():
             'Leaking strut', 'Worn bushings', 'Shock failure',
             'Dead battery', 'No charge', 'Noisy bearing'
         ],
-        'Failure_Code': [
+        'Malfunction_Code': [
             'HVAC-AC-001', 'HVAC-AC-010', 'HVAC-AC-020', 'HVAC-HT-001', 'HVAC-HT-002',
             'ENG-FUEL-001', 'ENG-FUEL-010', 'ENG-IGN-001', 'ENG-IGN-010', 'ENG-COOL-001',
             'BRK-HYD-001', 'BRK-HYD-010', 'BRK-FRIC-001', 'BRK-FRIC-010',
@@ -245,7 +330,7 @@ def init_data():
             'SUSP-FRT-R001', 'SUSP-FRT-R010', 'SUSP-REAR-R001',
             'ELEC-BAT-R001', 'ELEC-CHG-R001', 'ELEC-CHG-R002'
         ],
-        'Recommended_Action': [
+        'Resolution_Description_English': [
             'Replace compressor; Replace clutch; Flush circuit; Replace filter/drier; Vacuum & recharge',
             'Replace condenser; Clean fins; Leak test; Vacuum & recharge',
             'Replace blower motor; Inspect resistor; Verify airflow',
@@ -266,47 +351,89 @@ def init_data():
             'Test battery; Replace if failed; Check charging system',
             'Replace alternator; Check belt; Test output',
             'Replace alternator; Check belt tension'
+        ],
+        'Resolution_Description_Arabic': [
+            'استبدال الضاغط؛ استبدال القابض؛ تنظيف الدائرة؛ استبدال الفلتر؛ شفط وإعادة شحن',
+            'استبدال المكثف؛ تنظيف الزعانف؛ اختبار التسرب؛ شفط وإعادة شحن',
+            'استبدال محرك النفخ؛ فحص المقاومة؛ التحقق من تدفق الهواء',
+            'استبدال قلب السخان؛ تنظيف الدائرة؛ تهوية النظام',
+            'تنظيف قلب السخان؛ فحص تدفق المبرد؛ استبدال إذا لزم الأمر',
+            'استبدال مضخة الوقود؛ فحص الكهرباء؛ التحقق من جودة الوقود',
+            'تنظيف الحاقنات؛ استبدال إذا لزم الأمر؛ فحص جودة الوقود',
+            'استبدال شمعات الإشعال؛ فحص الفجوة؛ التحقق من توقيت الإشعال',
+            'استبدال ملف الإشعال؛ فحص التوصيلات؛ اختبار المقاومة',
+            'استبدال الرادياتير؛ اختبار الضغط؛ فحص مستوى المبرد',
+            'استبدال الأسطوانة الرئيسية؛ تهوية نظام الفرامل',
+            'استبدال خط الفرامل؛ تهوية النظام؛ اختبار الضغط',
+            'استبدال فحمات الفرامل؛ تجديد الأقراص؛ تشحيم المنزلقات',
+            'استبدال أو تجديد القرص؛ استبدال الفحمات',
+            'استبدال مجموعة الدعامة؛ إجراء محاذاة',
+            'استبدال وسائد ذراع التحكم؛ إجراء محاذاة',
+            'استبدال ماصات الصدمات؛ فحص نقاط التثبيت',
+            'اختبار البطارية؛ استبدال إذا فشلت؛ فحص نظام الشحن',
+            'استبدال المولد؛ فحص الحزام؛ اختبار الإخراج',
+            'استبدال المولد؛ فحص شد الحزام'
+        ],
+        'Cause_Description_English': [
+            'Compressor mechanical seizure', 'Condenser tube leak', 'Blower motor electrical failure',
+            'Heater core leak', 'Heater core blockage', 'Fuel pump mechanical failure',
+            'Fuel injector clogged', 'Spark plugs fouled', 'Ignition coil failure',
+            'Radiator leak', 'Master cylinder internal leak', 'Brake line rupture',
+            'Brake pads worn', 'Rotor warped', 'Strut leaking', 'Control arm bushings worn',
+            'Shock absorber failure', 'Battery dead', 'Alternator not charging', 'Alternator bearing noise'
+        ],
+        'Cause_Description_Arabic': [
+            'انحشار ميكانيكي للضاغط', 'تسرب أنبوب المكثف', 'فشل كهربائي لمحرك النفخ',
+            'تسرب قلب السخان', 'انسداد قلب السخان', 'فشل ميكانيكي لمضخة الوقود',
+            'انسداد حاقن الوقود', 'شمعات إشعال متسخة', 'فشل ملف الإشعال',
+            'تسرب الرادياتير', 'تسرب داخلي للأسطوانة الرئيسية', 'انفجار خط الفرامل',
+            'فحمات الفرامل مستهلكة', 'القرص ملتوي', 'الدعامة متسربة', 'وسائد ذراع التحكم مستهلكة',
+            'فشل ماص الصدمات', 'البطارية فارغة', 'المولد لا يشحن', 'ضوضاء في محمل المولد'
         ]
     })
     
     # ========================================================================
-    # WORK ORDERS & MALFUNCTIONS
+    # WORK ORDERS & MALFUNCTIONS (ERD compliant field names)
     # ========================================================================
     
-    # Generate sample work orders
     work_orders = []
     malfunctions = []
     wo_id_counter = 1
     mal_id_counter = 1
     
     for i in range(20):
-        # Random selections
         vehicle = st.session_state.df_vehicle.sample(1).iloc[0]
         workshop = st.session_state.df_workshop.sample(1).iloc[0]
         failure = st.session_state.df_failure_catalogue.sample(1).iloc[0]
-        technician = st.session_state.df_user[st.session_state.df_user['Role'] == 'Technician'].sample(1).iloc[0]
+        technician_user = st.session_state.df_technical_user.sample(1).iloc[0]
+        technician_employee = st.session_state.df_user[
+            st.session_state.df_user['Employee_ID'] == technician_user['Employee_ID']
+        ].iloc[0]
         
         malfunction_date = datetime.now() - timedelta(days=np.random.randint(1, 180))
-        wo_date = malfunction_date + timedelta(days=np.random.randint(0, 3))
+        reception_date = malfunction_date + timedelta(days=np.random.randint(0, 2))
+        creation_date = reception_date + timedelta(days=np.random.randint(0, 1))
         
         status = np.random.choice(['Open', 'In Progress', 'Completed'], p=[0.3, 0.4, 0.3])
         require_parts = np.random.choice([True, False], p=[0.6, 0.4])
         
         completion_date = None
         if status == 'Completed':
-            completion_date = wo_date + timedelta(days=np.random.randint(1, 30))
+            completion_date = creation_date + timedelta(days=np.random.randint(1, 30))
         
         work_order = {
-            'Work_Order_ID': wo_id_counter,
-            'Employee_ID': technician['Employee_ID'],
+            'ID': wo_id_counter,
+            'Employee_ID': technician_user['Employee_ID'],
             'Workshop_Name': workshop['Workshop_Name'],
             'Vehicle_Number': vehicle['Vehicle_Number'],
-            'A_Received_Date': wo_date.strftime('%Y-%m-%d'),
+            'AlKhorayef_Reception_Date': reception_date.strftime('%Y-%m-%d'),
             'Equipment_Owning_Unit': vehicle['Unit_Name'],
             'Vehicle_Type': vehicle['Vehicle_Type'],
+            'Malfunction_Type': failure['System'],
             'Malfunction_Date': malfunction_date.strftime('%Y-%m-%d'),
-            'Work_Order_Date': wo_date.strftime('%Y-%m-%d'),
-            'Technician_Name': f"{technician['Employee_First_Name']} {technician['Employee_Last_Name']}",
+            'MNG_Work_Order_Creation_Date': creation_date.strftime('%Y-%m-%d'),
+            'AIC_Work_Order_Number': f'SP-{datetime.now().year}-{wo_id_counter:05d}',
+            'Technician_Name': f"{technician_employee['Employee_First_Name']} {technician_employee['Employee_Last_Name']}",
             'Work_Order_Status': status,
             'Require_Spare_Parts': require_parts,
             'Work_Order_Completion_Date': completion_date.strftime('%Y-%m-%d') if completion_date else None,
@@ -314,17 +441,18 @@ def init_data():
         }
         
         malfunction = {
-            'Malfunction_ID': mal_id_counter,
+            'ID': mal_id_counter,
             'Vehicle_Number': vehicle['Vehicle_Number'],
             'Work_Order_ID': wo_id_counter,
-            'Malfunction_Code': failure['Failure_Code'],
-            'Resolution_Description_English': failure['Recommended_Action'],
-            'Resolution_Description_Arabic': 'إجراء موصى به',
-            'Root_Cause': failure['Failure_Mode'],
+            'Malfunction_Code': failure['Malfunction_Code'],
+            'Resolution_Description_English': failure['Resolution_Description_English'],
+            'Resolution_Description_Arabic': failure['Resolution_Description_Arabic'],
+            'Resolution_Code': failure['Resolution_Code'],
+            'Cause_Description_English': failure['Cause_Description_English'],
+            'Cause_Description_Arabic': failure['Cause_Description_Arabic'],
             'Cause_Code': failure['Cause_Code'],
-            'Cause_Description_English': failure['Failure_Mode'],
-            'Cause_Description_Arabic': 'وصف السبب',
-            'Fault_Code': failure['Failure_Code']
+            'Description_English': f"{failure['System']} - {failure['Subsystem']} - {failure['Component']} - {failure['Failure_Mode']}",
+            'Description_Arabic': f"نظام {failure['System']} - نظام فرعي {failure['Subsystem']}"
         }
         
         work_orders.append(work_order)
@@ -340,14 +468,15 @@ def init_data():
     # ========================================================================
     
     st.session_state.df_warehouse = pd.DataFrame({
-        'Warehouse_ID': [1, 2, 3, 4, 5],
+        'ID': [1, 2, 3, 4, 5],
         'Warehouse_Name': ['Central Warehouse', 'Eastern Warehouse', 'Western Warehouse', 'Northern Warehouse', 'Southern Warehouse'],
-        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern'],
-        'Unit': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105']
+        'Part_Number': ['WH-C-001', 'WH-E-001', 'WH-W-001', 'WH-N-001', 'WH-S-001'],
+        'Unit': ['Unit 101', 'Unit 102', 'Unit 103', 'Unit 104', 'Unit 105'],
+        'Region': ['Central', 'Eastern', 'Western', 'Northern', 'Southern']
     })
     
     st.session_state.df_part = pd.DataFrame({
-        'Part_ID': range(1, 21),
+        'ID': range(1, 21),
         'Warehouse_Code': ['WH-C', 'WH-E', 'WH-W', 'WH-N', 'WH-S'] * 4,
         'Part_Number': [f'PN-{i:05d}' for i in range(1, 21)],
         'OEM_Number': [f'OEM-{i:05d}' for i in range(1, 21)],
@@ -359,12 +488,16 @@ def init_data():
                               'ملف الإشعال', 'المبرد', 'بطارية 12 فولت', 'حاقن الوقود', 'نواة السخان',
                               'اسطوانة رئيسية', 'ممتص الصدمات', 'طقم شمعة إشعال', 'قرص الفرامل', 'ذراع التحكم',
                               'المكثف', 'محرك النفخ', 'مضخة الماء', 'منظم الحرارة', 'شد الحزام'],
-        'Part_Location': [f'A-{i:02d}' for i in range(1, 21)],
+        'Part_Locations': [f'A-{i:02d}' for i in range(1, 21)],
         'Part_Quantity': np.random.randint(5, 100, 20)
     })
     
+    # ========================================================================
+    # SUPPLY REQUEST, PURCHASE REQUEST, ORDERS
+    # ========================================================================
+    
     st.session_state.df_supply_request = pd.DataFrame({
-        'Supply_Request_ID': [1, 2, 3],
+        'ID': [1, 2, 3],
         'Work_Order_ID': [1, 2, 5],
         'Part_ID': [1, 2, 3],
         'Quantity_Requested': [2, 1, 4],
@@ -372,7 +505,7 @@ def init_data():
     })
     
     st.session_state.df_purchase_request = pd.DataFrame({
-        'PR_ID': [1, 2],
+        'ID': [1, 2],
         'Supply_Request_ID': [1, 2],
         'Employee_ID': [5, 5],
         'PR_Date': [(datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d'),
@@ -381,14 +514,14 @@ def init_data():
     })
     
     st.session_state.df_orders = pd.DataFrame({
-        'PO_ID': [1],
-        'Order_Status': ['In Transit'],
+        'ID': [1],
+        'PR_ID': [1],
+        'Status': ['In Transit'],
         'Order_Date': [(datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')],
-        'Delivery_Date': [(datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d')],
-        'Warehouse_Status': ['Pending Receipt']
+        'Delivery_Date': [(datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d')]
     })
     
-    # Counter for new IDs
+    # Counters for new IDs
     st.session_state.work_order_id_counter = wo_id_counter
     st.session_state.malfunction_id_counter = mal_id_counter
     st.session_state.supply_request_id_counter = 4
@@ -417,18 +550,96 @@ def login_page():
         if st.button("Login", use_container_width=True, type="primary"):
             if username and password:
                 hashed_pw = hash_password(password)
-                user = st.session_state.df_user[
-                    (st.session_state.df_user['Username'] == username) & 
-                    (st.session_state.df_user['Password'] == hashed_pw)
+                
+                # Check TechnicalUser
+                tech_user = st.session_state.df_technical_user[
+                    (st.session_state.df_technical_user['Username'] == username) & 
+                    (st.session_state.df_technical_user['Password'] == hashed_pw)
                 ]
                 
-                if not user.empty:
+                if not tech_user.empty:
+                    employee = st.session_state.df_user[
+                        st.session_state.df_user['Employee_ID'] == tech_user.iloc[0]['Employee_ID']
+                    ].iloc[0]
+                    
                     st.session_state.logged_in = True
-                    st.session_state.current_user = user.iloc[0].to_dict()
-                    st.success(f"Welcome, {user.iloc[0]['Employee_First_Name']}!")
+                    st.session_state.current_user = {
+                        **employee.to_dict(),
+                        'Role': 'Technician',
+                        'Username': username,
+                        'Workshop_Name': tech_user.iloc[0]['Workshop_Name']
+                    }
+                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
                     st.rerun()
-                else:
-                    st.error("Invalid username or password")
+                    return
+                
+                # Check InventoryUser
+                inv_user = st.session_state.df_inventory_user[
+                    (st.session_state.df_inventory_user['Username'] == username) & 
+                    (st.session_state.df_inventory_user['Password'] == hashed_pw)
+                ]
+                
+                if not inv_user.empty:
+                    employee = st.session_state.df_user[
+                        st.session_state.df_user['Employee_ID'] == inv_user.iloc[0]['Employee_ID']
+                    ].iloc[0]
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = {
+                        **employee.to_dict(),
+                        'Role': 'Inventory',
+                        'Username': username,
+                        'Workshop_Name': None
+                    }
+                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
+                    st.rerun()
+                    return
+                
+                # Check ProcurementUser
+                proc_user = st.session_state.df_procurement_user[
+                    (st.session_state.df_procurement_user['Username'] == username) & 
+                    (st.session_state.df_procurement_user['Password'] == hashed_pw)
+                ]
+                
+                if not proc_user.empty:
+                    employee = st.session_state.df_user[
+                        st.session_state.df_user['Employee_ID'] == proc_user.iloc[0]['Employee_ID']
+                    ].iloc[0]
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = {
+                        **employee.to_dict(),
+                        'Role': 'Procurement',
+                        'Username': username,
+                        'Workshop_Name': None
+                    }
+                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
+                    st.rerun()
+                    return
+                
+                # Check Other Users (Supervisor, Manager, Admin)
+                other_user = st.session_state.df_other_users[
+                    (st.session_state.df_other_users['Username'] == username) & 
+                    (st.session_state.df_other_users['Password'] == hashed_pw)
+                ]
+                
+                if not other_user.empty:
+                    employee = st.session_state.df_user[
+                        st.session_state.df_user['Employee_ID'] == other_user.iloc[0]['Employee_ID']
+                    ].iloc[0]
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = {
+                        **employee.to_dict(),
+                        'Role': other_user.iloc[0]['Role'],
+                        'Username': username,
+                        'Workshop_Name': other_user.iloc[0]['Workshop_Name']
+                    }
+                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
+                    st.rerun()
+                    return
+                
+                st.error("Invalid username or password")
             else:
                 st.warning("Please enter both username and password")
         
@@ -501,8 +712,7 @@ def page_dashboard():
     # Filter work orders based on role
     df_wo = st.session_state.df_work_orders.copy()
     
-    if user['Role'] in ['Technician', 'Supervisor']:
-        # Filter by workshop
+    if user['Role'] in ['Technician', 'Supervisor'] and user.get('Workshop_Name'):
         df_wo = df_wo[df_wo['Workshop_Name'] == user['Workshop_Name']]
     
     # KPIs
@@ -542,7 +752,7 @@ def page_dashboard():
     st.markdown("---")
     st.subheader("Recent Work Orders")
     
-    display_cols = ['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status', 
+    display_cols = ['ID', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status', 
                    'Malfunction_Date', 'Technician_Name']
     
     st.dataframe(
@@ -563,8 +773,8 @@ def page_create_work_order():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Workshop selection (filtered by user's workshop if technician)
-            if user['Role'] == 'Technician':
+            # Workshop selection
+            if user['Role'] == 'Technician' and user.get('Workshop_Name'):
                 workshop = st.text_input("Workshop", value=user['Workshop_Name'], disabled=True)
             else:
                 workshops = st.session_state.df_workshop['Workshop_Name'].tolist()
@@ -575,36 +785,39 @@ def page_create_work_order():
             vehicles = st.session_state.df_vehicle['Vehicle_Number'].tolist()
             vehicle_number = st.selectbox("Vehicle Number *", vehicles)
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            received_date = st.date_input("Received Date *", datetime.now())
+            reception_date = st.date_input("Reception Date *", datetime.now())
         
         with col2:
             malfunction_date = st.date_input("Malfunction Date *", datetime.now())
         
+        with col3:
+            creation_date = st.date_input("WO Creation Date *", datetime.now())
+        
         # Cascading failure selection
         st.markdown("---")
         st.subheader("🔧 Fault Classification")
-        st.caption("Select System → Subsystem → Component → Failure Mode")
+        st.caption("Select System → Subsystem → Component → Failure Mode (each selection filters the next)")
         
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             systems = get_cascading_options()
-            selected_system = st.selectbox("System *", [''] + systems)
+            selected_system = st.selectbox("System *", [''] + systems, key="sys_select")
         
         with col2:
             subsystems = get_cascading_options(selected_system) if selected_system else []
-            selected_subsystem = st.selectbox("Subsystem *", [''] + subsystems)
+            selected_subsystem = st.selectbox("Subsystem *", [''] + subsystems, key="subsys_select")
         
         with col3:
             components = get_cascading_options(selected_system, selected_subsystem) if selected_subsystem else []
-            selected_component = st.selectbox("Component *", [''] + components)
+            selected_component = st.selectbox("Component *", [''] + components, key="comp_select")
         
         with col4:
             failure_modes = get_cascading_options(selected_system, selected_subsystem, selected_component) if selected_component else []
-            selected_failure = st.selectbox("Failure Mode *", [''] + failure_modes)
+            selected_failure = st.selectbox("Failure Mode *", [''] + failure_modes, key="fail_select")
         
         # Auto-populated fields
         failure_details = None
@@ -614,18 +827,21 @@ def page_create_work_order():
             if failure_details:
                 st.markdown("---")
                 st.subheader("✨ Auto-Generated Codes")
-                st.success("Codes automatically generated from catalogue")
+                st.success("📌 Codes automatically generated from catalogue")
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.text_input("Failure Code", value=failure_details['Failure_Code'], disabled=True)
+                    st.text_input("Malfunction Code", value=failure_details['Malfunction_Code'], disabled=True)
                 with col2:
                     st.text_input("Cause Code", value=failure_details['Cause_Code'], disabled=True)
                 with col3:
                     st.text_input("Resolution Code", value=failure_details['Resolution_Code'], disabled=True)
                 
-                st.markdown("**Recommended Action:**")
-                st.info(failure_details['Recommended_Action'])
+                st.markdown("**📝 Recommended Action (English):**")
+                st.info(failure_details['Resolution_Description_English'])
+                
+                st.markdown("**📝 الإجراء الموصى به (العربية):**")
+                st.info(failure_details['Resolution_Description_Arabic'])
         
         # Additional details
         st.markdown("---")
@@ -640,9 +856,9 @@ def page_create_work_order():
         
         if submitted:
             if not vehicle_number or not selected_system or not selected_subsystem or not selected_component or not selected_failure:
-                st.error("Please complete all required fields")
+                st.error("❌ Please complete all required fields")
             elif not failure_details:
-                st.error("Invalid fault classification")
+                st.error("❌ Invalid fault classification")
             else:
                 # Get vehicle details
                 vehicle = st.session_state.df_vehicle[
@@ -654,15 +870,17 @@ def page_create_work_order():
                 mal_id = st.session_state.malfunction_id_counter
                 
                 new_wo = {
-                    'Work_Order_ID': wo_id,
+                    'ID': wo_id,
                     'Employee_ID': user['Employee_ID'],
-                    'Workshop_Name': workshop if user['Role'] != 'Technician' else user['Workshop_Name'],
+                    'Workshop_Name': workshop if user['Role'] != 'Technician' or not user.get('Workshop_Name') else user['Workshop_Name'],
                     'Vehicle_Number': vehicle_number,
-                    'A_Received_Date': received_date.strftime('%Y-%m-%d'),
+                    'AlKhorayef_Reception_Date': reception_date.strftime('%Y-%m-%d'),
                     'Equipment_Owning_Unit': vehicle['Unit_Name'],
                     'Vehicle_Type': vehicle['Vehicle_Type'],
+                    'Malfunction_Type': selected_system,
                     'Malfunction_Date': malfunction_date.strftime('%Y-%m-%d'),
-                    'Work_Order_Date': datetime.now().strftime('%Y-%m-%d'),
+                    'MNG_Work_Order_Creation_Date': creation_date.strftime('%Y-%m-%d'),
+                    'AIC_Work_Order_Number': f'SP-{datetime.now().year}-{wo_id:05d}',
                     'Technician_Name': f"{user['Employee_First_Name']} {user['Employee_Last_Name']}",
                     'Work_Order_Status': 'Open',
                     'Require_Spare_Parts': require_parts,
@@ -671,17 +889,18 @@ def page_create_work_order():
                 }
                 
                 new_malfunction = {
-                    'Malfunction_ID': mal_id,
+                    'ID': mal_id,
                     'Vehicle_Number': vehicle_number,
                     'Work_Order_ID': wo_id,
-                    'Malfunction_Code': failure_details['Failure_Code'],
-                    'Resolution_Description_English': failure_details['Recommended_Action'],
-                    'Resolution_Description_Arabic': 'إجراء موصى به',
-                    'Root_Cause': failure_details['Failure_Mode'],
+                    'Malfunction_Code': failure_details['Malfunction_Code'],
+                    'Resolution_Description_English': failure_details['Resolution_Description_English'],
+                    'Resolution_Description_Arabic': failure_details['Resolution_Description_Arabic'],
+                    'Resolution_Code': failure_details['Resolution_Code'],
+                    'Cause_Description_English': failure_details['Cause_Description_English'],
+                    'Cause_Description_Arabic': failure_details['Cause_Description_Arabic'],
                     'Cause_Code': failure_details['Cause_Code'],
-                    'Cause_Description_English': failure_details['Failure_Mode'],
-                    'Cause_Description_Arabic': 'وصف السبب',
-                    'Fault_Code': failure_details['Failure_Code']
+                    'Description_English': f"{selected_system} - {selected_subsystem} - {selected_component} - {selected_failure}",
+                    'Description_Arabic': f"نظام {selected_system} - نظام فرعي {selected_subsystem}"
                 }
                 
                 # Add to dataframes
@@ -701,6 +920,22 @@ def page_create_work_order():
                 
                 st.success(f"✅ Work Order **WO-{wo_id:05d}** created successfully!")
                 st.balloons()
+                
+                # Show summary
+                with st.expander("📋 Work Order Summary", expanded=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Work Order ID:** {wo_id}")
+                        st.markdown(f"**AIC Number:** {new_wo['AIC_Work_Order_Number']}")
+                        st.markdown(f"**Vehicle:** {vehicle_number}")
+                        st.markdown(f"**System:** {selected_system}")
+                        st.markdown(f"**Component:** {selected_component}")
+                    with col2:
+                        st.markdown(f"**Malfunction Code:** `{failure_details['Malfunction_Code']}`")
+                        st.markdown(f"**Cause Code:** `{failure_details['Cause_Code']}`")
+                        st.markdown(f"**Resolution Code:** `{failure_details['Resolution_Code']}`")
+                        st.markdown(f"**Status:** Open")
+                        st.markdown(f"**Require Parts:** {'Yes' if require_parts else 'No'}")
 
 def page_my_work_orders():
     """Page for technicians to view their work orders"""
@@ -717,10 +952,13 @@ def page_my_work_orders():
     col1, col2 = st.columns(2)
     
     with col1:
-        status_filter = st.selectbox("Filter by Status", ['All'] + ['Open', 'In Progress', 'Completed'])
+        status_filter = st.selectbox("Filter by Status", ['All', 'Open', 'In Progress', 'Completed'])
     
     with col2:
-        vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+        if not df_wo.empty:
+            vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+        else:
+            vehicle_filter = st.selectbox("Filter by Vehicle", ['All'])
     
     # Apply filters
     if status_filter != 'All':
@@ -732,26 +970,31 @@ def page_my_work_orders():
     st.info(f"Showing {len(df_wo)} work orders")
     
     # Display work orders
-    for idx, wo in df_wo.iterrows():
-        with st.expander(f"WO-{wo['Work_Order_ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"**Work Order ID:** WO-{wo['Work_Order_ID']:05d}")
-                st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
-                st.markdown(f"**Workshop:** {wo['Workshop_Name']}")
-                st.markdown(f"**Status:** {wo['Work_Order_Status']}")
-            
-            with col2:
-                st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
-                st.markdown(f"**WO Date:** {wo['Work_Order_Date']}")
-                st.markdown(f"**Require Parts:** {'Yes' if wo['Require_Spare_Parts'] else 'No'}")
-                if wo['Work_Order_Completion_Date']:
-                    st.markdown(f"**Completion Date:** {wo['Work_Order_Completion_Date']}")
-            
-            if wo['Comments']:
-                st.markdown("**Comments:**")
-                st.info(wo['Comments'])
+    if df_wo.empty:
+        st.warning("No work orders found")
+    else:
+        for idx, wo in df_wo.iterrows():
+            with st.expander(f"WO-{wo['ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"**Work Order ID:** WO-{wo['ID']:05d}")
+                    st.markdown(f"**AIC Number:** {wo['AIC_Work_Order_Number']}")
+                    st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
+                    st.markdown(f"**Workshop:** {wo['Workshop_Name']}")
+                    st.markdown(f"**Status:** {wo['Work_Order_Status']}")
+                
+                with col2:
+                    st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
+                    st.markdown(f"**Reception Date:** {wo['AlKhorayef_Reception_Date']}")
+                    st.markdown(f"**Creation Date:** {wo['MNG_Work_Order_Creation_Date']}")
+                    st.markdown(f"**Require Parts:** {'Yes' if wo['Require_Spare_Parts'] else 'No'}")
+                    if wo['Work_Order_Completion_Date']:
+                        st.markdown(f"**Completion Date:** {wo['Work_Order_Completion_Date']}")
+                
+                if wo['Comments']:
+                    st.markdown("**Comments:**")
+                    st.info(wo['Comments'])
 
 def page_supervisor_work_orders():
     """Page for supervisors to manage work orders"""
@@ -760,18 +1003,24 @@ def page_supervisor_work_orders():
     user = st.session_state.current_user
     
     # Filter by supervisor's workshop
-    df_wo = st.session_state.df_work_orders[
-        st.session_state.df_work_orders['Workshop_Name'] == user['Workshop_Name']
-    ].copy()
+    if user.get('Workshop_Name'):
+        df_wo = st.session_state.df_work_orders[
+            st.session_state.df_work_orders['Workshop_Name'] == user['Workshop_Name']
+        ].copy()
+    else:
+        df_wo = st.session_state.df_work_orders.copy()
     
     # Filters
     col1, col2 = st.columns(2)
     
     with col1:
-        status_filter = st.selectbox("Filter by Status", ['All'] + ['Open', 'In Progress', 'Completed'])
+        status_filter = st.selectbox("Filter by Status", ['All', 'Open', 'In Progress', 'Completed'])
     
     with col2:
-        vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+        if not df_wo.empty:
+            vehicle_filter = st.selectbox("Filter by Vehicle", ['All'] + sorted(df_wo['Vehicle_Number'].unique().tolist()))
+        else:
+            vehicle_filter = st.selectbox("Filter by Vehicle", ['All'])
     
     # Apply filters
     if status_filter != 'All':
@@ -780,70 +1029,74 @@ def page_supervisor_work_orders():
     if vehicle_filter != 'All':
         df_wo = df_wo[df_wo['Vehicle_Number'] == vehicle_filter]
     
-    st.info(f"Showing {len(df_wo)} work orders for {user['Workshop_Name']}")
+    st.info(f"Showing {len(df_wo)} work orders")
     
     # Display work orders with edit capability
-    for idx, wo in df_wo.iterrows():
-        with st.expander(f"WO-{wo['Work_Order_ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"**Work Order ID:** WO-{wo['Work_Order_ID']:05d}")
-                st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
-                st.markdown(f"**Technician:** {wo['Technician_Name']}")
-                st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
-            
-            with col2:
-                # Editable status
-                new_status = st.selectbox(
-                    "Status",
-                    ['Open', 'In Progress', 'Completed'],
-                    index=['Open', 'In Progress', 'Completed'].index(wo['Work_Order_Status']),
-                    key=f"status_{wo['Work_Order_ID']}"
-                )
+    if df_wo.empty:
+        st.warning("No work orders found")
+    else:
+        for idx, wo in df_wo.iterrows():
+            with st.expander(f"WO-{wo['ID']:05d} - {wo['Vehicle_Number']} - {wo['Work_Order_Status']}"):
+                col1, col2 = st.columns(2)
                 
-                if new_status == 'Completed':
-                    completion_date = st.date_input(
-                        "Completion Date",
-                        value=datetime.strptime(wo['Work_Order_Completion_Date'], '%Y-%m-%d') if wo['Work_Order_Completion_Date'] else datetime.now(),
-                        key=f"completion_{wo['Work_Order_ID']}"
+                with col1:
+                    st.markdown(f"**Work Order ID:** WO-{wo['ID']:05d}")
+                    st.markdown(f"**AIC Number:** {wo['AIC_Work_Order_Number']}")
+                    st.markdown(f"**Vehicle:** {wo['Vehicle_Number']}")
+                    st.markdown(f"**Technician:** {wo['Technician_Name']}")
+                    st.markdown(f"**Malfunction Date:** {wo['Malfunction_Date']}")
+                
+                with col2:
+                    # Editable status
+                    new_status = st.selectbox(
+                        "Status",
+                        ['Open', 'In Progress', 'Completed'],
+                        index=['Open', 'In Progress', 'Completed'].index(wo['Work_Order_Status']),
+                        key=f"status_{wo['ID']}"
+                    )
+                    
+                    completion_date = None
+                    if new_status == 'Completed':
+                        completion_date = st.date_input(
+                            "Completion Date",
+                            value=datetime.strptime(wo['Work_Order_Completion_Date'], '%Y-%m-%d') if wo['Work_Order_Completion_Date'] else datetime.now(),
+                            key=f"completion_{wo['ID']}"
+                        )
+                    
+                    new_comments = st.text_area(
+                        "Comments",
+                        value=wo['Comments'] if wo['Comments'] else '',
+                        key=f"comments_{wo['ID']}"
                     )
                 
-                new_comments = st.text_area(
-                    "Comments",
-                    value=wo['Comments'] if wo['Comments'] else '',
-                    key=f"comments_{wo['Work_Order_ID']}"
-                )
-            
-            # Update button
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if st.button("💾 Update", key=f"update_{wo['Work_Order_ID']}", use_container_width=True):
-                    # Update work order
-                    st.session_state.df_work_orders.loc[
-                        st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
-                        'Work_Order_Status'
-                    ] = new_status
-                    
-                    st.session_state.df_work_orders.loc[
-                        st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
-                        'Comments'
-                    ] = new_comments
-                    
-                    if new_status == 'Completed':
+                # Update button
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("💾 Update", key=f"update_{wo['ID']}", use_container_width=True):
+                        # Update work order
                         st.session_state.df_work_orders.loc[
-                            st.session_state.df_work_orders['Work_Order_ID'] == wo['Work_Order_ID'],
-                            'Work_Order_Completion_Date'
-                        ] = completion_date.strftime('%Y-%m-%d')
-                    
-                    st.success("Work order updated!")
-                    st.rerun()
-            
-            with col2:
-                if wo['Require_Spare_Parts'] and st.button("📦 Create Supply Request", key=f"supply_{wo['Work_Order_ID']}", use_container_width=True):
-                    st.session_state.selected_wo_for_supply = wo['Work_Order_ID']
-                    st.session_state.show_supply_form = True
+                            st.session_state.df_work_orders['ID'] == wo['ID'],
+                            'Work_Order_Status'
+                        ] = new_status
+                        
+                        st.session_state.df_work_orders.loc[
+                            st.session_state.df_work_orders['ID'] == wo['ID'],
+                            'Comments'
+                        ] = new_comments
+                        
+                        if new_status == 'Completed' and completion_date:
+                            st.session_state.df_work_orders.loc[
+                                st.session_state.df_work_orders['ID'] == wo['ID'],
+                                'Work_Order_Completion_Date'
+                            ] = completion_date.strftime('%Y-%m-%d')
+                        
+                        st.success("✅ Work order updated!")
+                        st.rerun()
+                
+                with col2:
+                    if wo['Require_Spare_Parts'] and st.button("📦 Create Supply Request", key=f"supply_{wo['ID']}", use_container_width=True):
+                        st.info("Supply request feature - to be implemented")
 
 def page_manager_dashboard():
     """Page for managers to view all sites"""
@@ -855,7 +1108,7 @@ def page_manager_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        regions = ['All'] + sorted(st.session_state.df_region['Region_Name'].tolist())
+        regions = ['All'] + sorted(st.session_state.df_region['Region'].tolist())
         region_filter = st.selectbox("Region", regions)
     
     with col2:
@@ -863,7 +1116,7 @@ def page_manager_dashboard():
         workshop_filter = st.selectbox("Workshop", workshops)
     
     with col3:
-        status_filter = st.selectbox("Status", ['All'] + ['Open', 'In Progress', 'Completed'])
+        status_filter = st.selectbox("Status", ['All', 'Open', 'In Progress', 'Completed'])
     
     with col4:
         systems = ['All'] + sorted(st.session_state.df_failure_catalogue['System'].unique().tolist())
@@ -882,15 +1135,7 @@ def page_manager_dashboard():
         df_wo = df_wo[df_wo['Work_Order_Status'] == status_filter]
     
     if system_filter != 'All':
-        # Get WO IDs with this system
-        mal_df = st.session_state.df_malfunction.merge(
-            st.session_state.df_failure_catalogue[['Failure_Code', 'System']],
-            left_on='Malfunction_Code',
-            right_on='Failure_Code',
-            how='left'
-        )
-        wo_ids = mal_df[mal_df['System'] == system_filter]['Work_Order_ID'].unique()
-        df_wo = df_wo[df_wo['Work_Order_ID'].isin(wo_ids)]
+        df_wo = df_wo[df_wo['Malfunction_Type'] == system_filter]
     
     # KPIs
     st.markdown("---")
@@ -912,9 +1157,9 @@ def page_manager_dashboard():
         # Average completion time
         completed = df_wo[df_wo['Work_Order_Status'] == 'Completed'].copy()
         if not completed.empty and completed['Work_Order_Completion_Date'].notna().any():
-            completed['wo_date'] = pd.to_datetime(completed['Work_Order_Date'])
+            completed['creation_date'] = pd.to_datetime(completed['MNG_Work_Order_Creation_Date'])
             completed['completion_date'] = pd.to_datetime(completed['Work_Order_Completion_Date'])
-            completed['days'] = (completed['completion_date'] - completed['wo_date']).dt.days
+            completed['days'] = (completed['completion_date'] - completed['creation_date']).dt.days
             avg_days = completed['days'].mean()
             st.metric("Avg Days to Complete", f"{avg_days:.1f}")
         else:
@@ -922,14 +1167,14 @@ def page_manager_dashboard():
     
     # Top failure modes
     st.markdown("---")
-    st.subheader("Top 5 Failure Modes")
+    st.subheader("Top 5 Malfunction Types")
     
     mal_df = st.session_state.df_malfunction[
-        st.session_state.df_malfunction['Work_Order_ID'].isin(df_wo['Work_Order_ID'])
+        st.session_state.df_malfunction['Work_Order_ID'].isin(df_wo['ID'])
     ]
     
     if not mal_df.empty:
-        top_failures = mal_df['Root_Cause'].value_counts().head(5)
+        top_failures = mal_df['Malfunction_Code'].value_counts().head(5)
         st.bar_chart(top_failures)
     else:
         st.info("No data available")
@@ -938,7 +1183,7 @@ def page_manager_dashboard():
     st.markdown("---")
     st.subheader("Work Orders")
     
-    display_cols = ['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status',
+    display_cols = ['ID', 'AIC_Work_Order_Number', 'Vehicle_Number', 'Workshop_Name', 'Work_Order_Status',
                    'Malfunction_Date', 'Technician_Name', 'Require_Spare_Parts']
     
     st.dataframe(
@@ -946,7 +1191,8 @@ def page_manager_dashboard():
         use_container_width=True,
         hide_index=True,
         column_config={
-            'Work_Order_ID': 'WO ID',
+            'ID': 'WO ID',
+            'AIC_Work_Order_Number': 'AIC Number',
             'Vehicle_Number': 'Vehicle',
             'Workshop_Name': 'Workshop',
             'Work_Order_Status': 'Status',
@@ -967,34 +1213,41 @@ def page_inventory():
         
         df_sr = st.session_state.df_supply_request.copy()
         
-        # Merge with work orders and parts
-        df_sr = df_sr.merge(
-            st.session_state.df_work_orders[['Work_Order_ID', 'Vehicle_Number', 'Workshop_Name']],
-            on='Work_Order_ID',
-            how='left'
-        )
-        
-        df_sr = df_sr.merge(
-            st.session_state.df_part[['Part_ID', 'Part_Number', 'English_Description']],
-            on='Part_ID',
-            how='left'
-        )
-        
-        st.dataframe(
-            df_sr,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                'Supply_Request_ID': 'SR ID',
-                'Work_Order_ID': 'WO ID',
-                'Vehicle_Number': 'Vehicle',
-                'Workshop_Name': 'Workshop',
-                'Part_Number': 'Part Number',
-                'English_Description': 'Description',
-                'Quantity_Requested': 'Qty',
-                'Status': 'Status'
-            }
-        )
+        if not df_sr.empty:
+            # Merge with work orders and parts
+            df_sr = df_sr.merge(
+                st.session_state.df_work_orders[['ID', 'Vehicle_Number', 'Workshop_Name']],
+                left_on='Work_Order_ID',
+                right_on='ID',
+                how='left'
+            )
+            
+            df_sr = df_sr.merge(
+                st.session_state.df_part[['ID', 'Part_Number', 'English_Description']],
+                left_on='Part_ID',
+                right_on='ID',
+                how='left',
+                suffixes=('', '_part')
+            )
+            
+            st.dataframe(
+                df_sr[['ID', 'Work_Order_ID', 'Vehicle_Number', 'Workshop_Name', 'Part_Number', 
+                      'English_Description', 'Quantity_Requested', 'Status']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    'ID': 'SR ID',
+                    'Work_Order_ID': 'WO ID',
+                    'Vehicle_Number': 'Vehicle',
+                    'Workshop_Name': 'Workshop',
+                    'Part_Number': 'Part Number',
+                    'English_Description': 'Description',
+                    'Quantity_Requested': 'Qty',
+                    'Status': 'Status'
+                }
+            )
+        else:
+            st.info("No supply requests available")
         
         # Update status
         st.markdown("---")
@@ -1004,15 +1257,15 @@ def page_inventory():
         new_status = st.selectbox("New Status", ['Pending', 'Approved', 'Issued', 'Cancelled'])
         
         if st.button("Update Status", type="primary"):
-            if sr_id in st.session_state.df_supply_request['Supply_Request_ID'].values:
+            if sr_id in st.session_state.df_supply_request['ID'].values:
                 st.session_state.df_supply_request.loc[
-                    st.session_state.df_supply_request['Supply_Request_ID'] == sr_id,
+                    st.session_state.df_supply_request['ID'] == sr_id,
                     'Status'
                 ] = new_status
-                st.success(f"Supply Request {sr_id} updated to {new_status}")
+                st.success(f"✅ Supply Request {sr_id} updated to {new_status}")
                 st.rerun()
             else:
-                st.error("Supply Request ID not found")
+                st.error("❌ Supply Request ID not found")
     
     with tab2:
         st.subheader("Parts Inventory")
@@ -1034,22 +1287,22 @@ def page_inventory():
         with col1:
             part_id = st.selectbox(
                 "Select Part",
-                st.session_state.df_part['Part_ID'].tolist(),
-                format_func=lambda x: f"{st.session_state.df_part[st.session_state.df_part['Part_ID']==x]['Part_Number'].iloc[0]} - {st.session_state.df_part[st.session_state.df_part['Part_ID']==x]['English_Description'].iloc[0]}"
+                st.session_state.df_part['ID'].tolist(),
+                format_func=lambda x: f"{st.session_state.df_part[st.session_state.df_part['ID']==x]['Part_Number'].iloc[0]} - {st.session_state.df_part[st.session_state.df_part['ID']==x]['English_Description'].iloc[0]}"
             )
         
         with col2:
-            current_qty = st.session_state.df_part[st.session_state.df_part['Part_ID']==part_id]['Part_Quantity'].iloc[0]
+            current_qty = st.session_state.df_part[st.session_state.df_part['ID']==part_id]['Part_Quantity'].iloc[0]
             st.metric("Current Quantity", current_qty)
         
         new_qty = st.number_input("New Quantity", min_value=0, value=int(current_qty))
         
         if st.button("Update Quantity", type="primary"):
             st.session_state.df_part.loc[
-                st.session_state.df_part['Part_ID'] == part_id,
+                st.session_state.df_part['ID'] == part_id,
                 'Part_Quantity'
             ] = new_qty
-            st.success(f"Part {part_id} quantity updated to {new_qty}")
+            st.success(f"✅ Part {part_id} quantity updated to {new_qty}")
             st.rerun()
 
 def page_procurement():
@@ -1065,30 +1318,35 @@ def page_procurement():
             st.session_state.df_supply_request['Status'] == 'Approved'
         ].copy()
         
-        # Merge with parts
-        df_sr = df_sr.merge(
-            st.session_state.df_part[['Part_ID', 'Part_Number', 'English_Description', 'Part_Quantity']],
-            on='Part_ID',
-            how='left'
-        )
-        
-        # Show only those needing purchase (quantity < requested)
-        df_sr['Needs_Purchase'] = df_sr['Part_Quantity'] < df_sr['Quantity_Requested']
-        df_sr = df_sr[df_sr['Needs_Purchase']]
-        
-        st.dataframe(
-            df_sr[['Supply_Request_ID', 'Part_Number', 'English_Description', 
-                  'Quantity_Requested', 'Part_Quantity']],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                'Supply_Request_ID': 'SR ID',
-                'Part_Number': 'Part Number',
-                'English_Description': 'Description',
-                'Quantity_Requested': 'Qty Needed',
-                'Part_Quantity': 'In Stock'
-            }
-        )
+        if not df_sr.empty:
+            # Merge with parts
+            df_sr = df_sr.merge(
+                st.session_state.df_part[['ID', 'Part_Number', 'English_Description', 'Part_Quantity']],
+                left_on='Part_ID',
+                right_on='ID',
+                how='left',
+                suffixes=('', '_part')
+            )
+            
+            # Show only those needing purchase
+            df_sr['Needs_Purchase'] = df_sr['Part_Quantity'] < df_sr['Quantity_Requested']
+            df_sr = df_sr[df_sr['Needs_Purchase']]
+            
+            st.dataframe(
+                df_sr[['ID', 'Part_Number', 'English_Description', 
+                      'Quantity_Requested', 'Part_Quantity']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    'ID': 'SR ID',
+                    'Part_Number': 'Part Number',
+                    'English_Description': 'Description',
+                    'Quantity_Requested': 'Qty Needed',
+                    'Part_Quantity': 'In Stock'
+                }
+            )
+        else:
+            st.info("No approved supply requests requiring purchase")
     
     with tab2:
         st.subheader("Create Purchase Request")
@@ -1101,11 +1359,11 @@ def page_procurement():
             submitted = st.form_submit_button("Create PR", type="primary")
             
             if submitted:
-                if supply_request_id in st.session_state.df_supply_request['Supply_Request_ID'].values:
+                if supply_request_id in st.session_state.df_supply_request['ID'].values:
                     pr_id = st.session_state.purchase_request_id_counter
                     
                     new_pr = {
-                        'PR_ID': pr_id,
+                        'ID': pr_id,
                         'Supply_Request_ID': supply_request_id,
                         'Employee_ID': user['Employee_ID'],
                         'PR_Date': datetime.now().strftime('%Y-%m-%d'),
@@ -1119,9 +1377,10 @@ def page_procurement():
                     
                     st.session_state.purchase_request_id_counter += 1
                     
-                    st.success(f"Purchase Request PR-{pr_id:05d} created!")
+                    st.success(f"✅ Purchase Request PR-{pr_id:05d} created!")
+                    st.rerun()
                 else:
-                    st.error("Supply Request ID not found")
+                    st.error("❌ Supply Request ID not found")
     
     with tab3:
         st.subheader("Purchase Orders")
@@ -1131,11 +1390,11 @@ def page_procurement():
             use_container_width=True,
             hide_index=True,
             column_config={
-                'PO_ID': 'PO ID',
-                'Order_Status': 'Status',
+                'ID': 'PO ID',
+                'PR_ID': 'PR ID',
+                'Status': 'Status',
                 'Order_Date': 'Order Date',
-                'Delivery_Date': 'Delivery Date',
-                'Warehouse_Status': 'Warehouse Status'
+                'Delivery_Date': 'Delivery Date'
             }
         )
 
@@ -1167,27 +1426,31 @@ def page_admin_catalogue():
                 failure_mode = st.text_input("Failure Mode *")
             
             with col2:
-                failure_code = st.text_input("Failure Code *")
+                malfunction_code = st.text_input("Malfunction Code *")
                 cause_code = st.text_input("Cause Code *")
                 resolution_code = st.text_input("Resolution Code *")
             
-            recommended_action = st.text_area("Recommended Action *", height=100)
+            resolution_desc_en = st.text_area("Resolution Description (English) *", height=100)
+            resolution_desc_ar = st.text_area("Resolution Description (Arabic) *", height=100)
             
             submitted = st.form_submit_button("Add to Catalogue", type="primary")
             
             if submitted:
-                if all([system, subsystem, component, failure_mode, failure_code, 
-                       cause_code, resolution_code, recommended_action]):
+                if all([system, subsystem, component, failure_mode, malfunction_code, 
+                       cause_code, resolution_code, resolution_desc_en, resolution_desc_ar]):
                     
                     new_entry = {
                         'System': system,
                         'Subsystem': subsystem,
                         'Component': component,
                         'Failure_Mode': failure_mode,
-                        'Failure_Code': failure_code,
+                        'Malfunction_Code': malfunction_code,
                         'Cause_Code': cause_code,
                         'Resolution_Code': resolution_code,
-                        'Recommended_Action': recommended_action
+                        'Resolution_Description_English': resolution_desc_en,
+                        'Resolution_Description_Arabic': resolution_desc_ar,
+                        'Cause_Description_English': f'{component} {failure_mode}',
+                        'Cause_Description_Arabic': f'{component} {failure_mode}'
                     }
                     
                     st.session_state.df_failure_catalogue = pd.concat([
@@ -1198,18 +1461,61 @@ def page_admin_catalogue():
                     st.success("✅ Catalogue entry added successfully!")
                     st.balloons()
                 else:
-                    st.error("Please fill in all required fields")
+                    st.error("❌ Please fill in all required fields")
 
 def page_admin_users():
     """Page for admin to view users"""
     st.title("👥 User Management")
     
+    st.subheader("All Users")
     st.dataframe(
-        st.session_state.df_user[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name', 
-                                  'Job_Title', 'Department_Code', 'Role', 'Username']],
+        st.session_state.df_user,
         use_container_width=True,
         hide_index=True
     )
+    
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.subheader("Technical Users")
+        tech_users = st.session_state.df_technical_user.merge(
+            st.session_state.df_user[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name']],
+            on='Employee_ID',
+            how='left'
+        )
+        st.dataframe(
+            tech_users[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name', 'Username', 'Workshop_Name']],
+            use_container_width=True,
+            hide_index=True
+        )
+    
+    with col2:
+        st.subheader("Inventory Users")
+        inv_users = st.session_state.df_inventory_user.merge(
+            st.session_state.df_user[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name']],
+            on='Employee_ID',
+            how='left'
+        )
+        st.dataframe(
+            inv_users[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name', 'Username']],
+            use_container_width=True,
+            hide_index=True
+        )
+    
+    with col3:
+        st.subheader("Procurement Users")
+        proc_users = st.session_state.df_procurement_user.merge(
+            st.session_state.df_user[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name']],
+            on='Employee_ID',
+            how='left'
+        )
+        st.dataframe(
+            proc_users[['Employee_ID', 'Employee_First_Name', 'Employee_Last_Name', 'Username']],
+            use_container_width=True,
+            hide_index=True
+        )
 
 # ============================================================================
 # SIDEBAR NAVIGATION
@@ -1231,7 +1537,7 @@ def render_sidebar():
         
         st.write(f"**{user['Employee_First_Name']} {user['Employee_Last_Name']}**")
         st.caption(f"Role: {user['Role']}")
-        if user['Workshop_Name']:
+        if user.get('Workshop_Name'):
             st.caption(f"Workshop: {user['Workshop_Name']}")
         
         st.markdown("---")
