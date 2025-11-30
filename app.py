@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="AMIC MMS - Work Order Management",
     page_icon="🔧",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded"  # Force sidebar to be open
 )
 
 # ============================================================================
@@ -34,10 +34,32 @@ st.markdown("""
     background-color: #FFFFFF !important;
 }
 
-/* Sidebar - Light Gray */
+/* Sidebar - Light Gray with better visibility */
 [data-testid="stSidebar"] {
     background-color: #F9FAFB !important;
     color: #111827 !important;
+    min-width: 280px !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+    background-color: #F9FAFB !important;
+}
+
+/* Sidebar toggle button */
+[data-testid="collapsedControl"] {
+    color: #111827 !important;
+    background-color: #F3F4F6 !important;
+}
+
+/* Make sidebar visible */
+section[data-testid="stSidebar"] {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Sidebar content */
+.css-1d391kg, .css-1lcbmhc {
+    background-color: #F9FAFB !important;
 }
 
 /* Text and headers */
@@ -665,7 +687,6 @@ def page_dashboard():
     st.title("📊 Dashboard")
     
     user = st.session_state.current_user
-    st.write(f"Welcome, **{user['Employee_First_Name']} {user['Employee_Last_Name']}** ({user['Role']})")
     
     st.markdown("---")
     
@@ -1481,62 +1502,6 @@ def page_admin_users():
 # SIDEBAR NAVIGATION
 # ============================================================================
 
-def render_sidebar():
-    """Render sidebar navigation based on user role"""
-    
-    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        return None
-    
-    user = st.session_state.current_user
-    
-    with st.sidebar:
-        st.title("🔧 AMIC MMS")
-        st.caption("Work Order Management")
-        
-        st.markdown("---")
-        
-        st.write(f"**{user['Employee_First_Name']} {user['Employee_Last_Name']}**")
-        st.caption(f"Role: {user['Role']}")
-        if user.get('Workshop_Name'):
-            st.caption(f"Workshop: {user['Workshop_Name']}")
-        
-        st.markdown("---")
-        
-        # Role-based navigation
-        pages = {
-            'Dashboard': 'dashboard'
-        }
-        
-        if user['Role'] == 'Technician':
-            pages['Create Work Order'] = 'create_wo'
-            pages['My Work Orders'] = 'my_wo'
-        
-        elif user['Role'] == 'Supervisor':
-            pages['Create Work Order'] = 'create_wo'
-            pages['Workshop Work Orders'] = 'supervisor_wo'
-        
-        elif user['Role'] == 'Manager':
-            pages['Manager Dashboard'] = 'manager'
-        
-        elif user['Role'] == 'Inventory':
-            pages['Inventory'] = 'inventory'
-        
-        elif user['Role'] == 'Procurement':
-            pages['Procurement'] = 'procurement'
-        
-        elif user['Role'] == 'Admin':
-            pages['Failure Catalogue'] = 'catalogue'
-            pages['Users'] = 'users'
-        
-        selected = st.radio("Navigation", list(pages.keys()))
-        
-        st.markdown("---")
-        
-        if st.button("🔄 Change Role", use_container_width=True):
-            change_role()
-        
-        return pages[selected]
-
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
@@ -1555,28 +1520,98 @@ def main():
         role_selection_page()
         return
     
-    # Render sidebar and get selected page
-    page = render_sidebar()
+    user = st.session_state.current_user
     
-    # Route to appropriate page
-    if page == 'dashboard':
-        page_dashboard()
-    elif page == 'create_wo':
-        page_create_work_order()
-    elif page == 'my_wo':
-        page_my_work_orders()
-    elif page == 'supervisor_wo':
-        page_supervisor_work_orders()
-    elif page == 'manager':
-        page_manager_dashboard()
-    elif page == 'inventory':
-        page_inventory()
-    elif page == 'procurement':
-        page_procurement()
-    elif page == 'catalogue':
-        page_admin_catalogue()
-    elif page == 'users':
-        page_admin_users()
+    # Header
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("🔧 AMIC MMS - Work Order Management")
+        st.caption(f"**{user['Employee_First_Name']} {user['Employee_Last_Name']}** - {user['Role']}" + 
+                  (f" - {user['Workshop_Name']}" if user.get('Workshop_Name') else ""))
+    with col2:
+        if st.button("🔄 Change Role", use_container_width=True):
+            change_role()
+    
+    st.markdown("---")
+    
+    # Navigation based on role
+    if user['Role'] == 'Technician':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '➕ Create Work Order', '📋 My Work Orders'],
+            horizontal=True
+        )
+        
+        if '📊 Dashboard' in selected:
+            page_dashboard()
+        elif '➕ Create' in selected:
+            page_create_work_order()
+        elif '📋 My Work' in selected:
+            page_my_work_orders()
+    
+    elif user['Role'] == 'Supervisor':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '➕ Create Work Order', '📋 Workshop Work Orders'],
+            horizontal=True
+        )
+        
+        if '📊 Dashboard' in selected:
+            page_dashboard()
+        elif '➕ Create' in selected:
+            page_create_work_order()
+        elif '📋 Workshop' in selected:
+            page_supervisor_work_orders()
+    
+    elif user['Role'] == 'Manager':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '📊 Manager Dashboard'],
+            horizontal=True
+        )
+        
+        if 'Manager' in selected:
+            page_manager_dashboard()
+        else:
+            page_dashboard()
+    
+    elif user['Role'] == 'Inventory':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '📦 Inventory'],
+            horizontal=True
+        )
+        
+        if '📦 Inventory' in selected:
+            page_inventory()
+        else:
+            page_dashboard()
+    
+    elif user['Role'] == 'Procurement':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '💼 Procurement'],
+            horizontal=True
+        )
+        
+        if '💼 Procurement' in selected:
+            page_procurement()
+        else:
+            page_dashboard()
+    
+    elif user['Role'] == 'Admin':
+        selected = st.radio(
+            "Navigation",
+            ['📊 Dashboard', '⚙️ Failure Catalogue', '👥 Users'],
+            horizontal=True
+        )
+        
+        if '⚙️ Failure' in selected:
+            page_admin_catalogue()
+        elif '👥 Users' in selected:
+            page_admin_users()
+        else:
+            page_dashboard()
 
 if __name__ == "__main__":
     main()
