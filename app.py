@@ -531,131 +531,91 @@ def init_data():
     st.session_state.data_initialized = True
 
 # ============================================================================
-# AUTHENTICATION
+# DEMO MODE - ROLE SELECTION
 # ============================================================================
 
-def login_page():
-    """Display login page"""
+def role_selection_page():
+    """Display role selection page for demo"""
     st.title("🔧 AMIC MMS - Work Order Management")
+    st.markdown("### Demo Mode - Select Your Role")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.subheader("🔐 Login")
+        st.subheader("👤 Choose Your Role")
         
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
+        role_options = {
+            'Technician': {
+                'employee_id': 1,
+                'name': 'Ali Al-Saud',
+                'workshop': 'Workshop Alpha',
+                'description': 'Create and view work orders'
+            },
+            'Supervisor': {
+                'employee_id': 2,
+                'name': 'Omar Al-Harbi',
+                'workshop': 'Workshop Alpha',
+                'description': 'Manage workshop work orders and status'
+            },
+            'Manager': {
+                'employee_id': 6,
+                'name': 'Nora Al-Dosari',
+                'workshop': None,
+                'description': 'View all sites and analytics'
+            },
+            'Inventory': {
+                'employee_id': 4,
+                'name': 'Layla Al-Otaibi',
+                'workshop': None,
+                'description': 'Manage parts and supply requests'
+            },
+            'Procurement': {
+                'employee_id': 5,
+                'name': 'Hassan Al-Shammari',
+                'workshop': None,
+                'description': 'Create purchase requests and orders'
+            },
+            'Admin': {
+                'employee_id': 8,
+                'name': 'Admin User',
+                'workshop': None,
+                'description': 'Manage failure catalogue and users'
+            }
+        }
         
-        if st.button("Login", use_container_width=True, type="primary"):
-            if username and password:
-                hashed_pw = hash_password(password)
-                
-                # Check TechnicalUser
-                tech_user = st.session_state.df_technical_user[
-                    (st.session_state.df_technical_user['Username'] == username) & 
-                    (st.session_state.df_technical_user['Password'] == hashed_pw)
-                ]
-                
-                if not tech_user.empty:
-                    employee = st.session_state.df_user[
-                        st.session_state.df_user['Employee_ID'] == tech_user.iloc[0]['Employee_ID']
-                    ].iloc[0]
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = {
-                        **employee.to_dict(),
-                        'Role': 'Technician',
-                        'Username': username,
-                        'Workshop_Name': tech_user.iloc[0]['Workshop_Name']
-                    }
-                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
-                    st.rerun()
-                    return
-                
-                # Check InventoryUser
-                inv_user = st.session_state.df_inventory_user[
-                    (st.session_state.df_inventory_user['Username'] == username) & 
-                    (st.session_state.df_inventory_user['Password'] == hashed_pw)
-                ]
-                
-                if not inv_user.empty:
-                    employee = st.session_state.df_user[
-                        st.session_state.df_user['Employee_ID'] == inv_user.iloc[0]['Employee_ID']
-                    ].iloc[0]
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = {
-                        **employee.to_dict(),
-                        'Role': 'Inventory',
-                        'Username': username,
-                        'Workshop_Name': None
-                    }
-                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
-                    st.rerun()
-                    return
-                
-                # Check ProcurementUser
-                proc_user = st.session_state.df_procurement_user[
-                    (st.session_state.df_procurement_user['Username'] == username) & 
-                    (st.session_state.df_procurement_user['Password'] == hashed_pw)
-                ]
-                
-                if not proc_user.empty:
-                    employee = st.session_state.df_user[
-                        st.session_state.df_user['Employee_ID'] == proc_user.iloc[0]['Employee_ID']
-                    ].iloc[0]
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = {
-                        **employee.to_dict(),
-                        'Role': 'Procurement',
-                        'Username': username,
-                        'Workshop_Name': None
-                    }
-                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
-                    st.rerun()
-                    return
-                
-                # Check Other Users (Supervisor, Manager, Admin)
-                other_user = st.session_state.df_other_users[
-                    (st.session_state.df_other_users['Username'] == username) & 
-                    (st.session_state.df_other_users['Password'] == hashed_pw)
-                ]
-                
-                if not other_user.empty:
-                    employee = st.session_state.df_user[
-                        st.session_state.df_user['Employee_ID'] == other_user.iloc[0]['Employee_ID']
-                    ].iloc[0]
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = {
-                        **employee.to_dict(),
-                        'Role': other_user.iloc[0]['Role'],
-                        'Username': username,
-                        'Workshop_Name': other_user.iloc[0]['Workshop_Name']
-                    }
-                    st.success(f"Welcome, {employee['Employee_First_Name']}!")
-                    st.rerun()
-                    return
-                
-                st.error("Invalid username or password")
-            else:
-                st.warning("Please enter both username and password")
+        selected_role = st.selectbox(
+            "Select Role to Demo",
+            options=list(role_options.keys()),
+            format_func=lambda x: f"{x} - {role_options[x]['name']}"
+        )
         
-        st.markdown("---")
-        st.info("""
-        **Demo Accounts:**
-        - Technician: `ali.tech` / `tech123`
-        - Supervisor: `omar.super` / `super123`
-        - Manager: `nora.mgr` / `mgr123`
-        - Inventory: `layla.inv` / `inv123`
-        - Procurement: `hassan.proc` / `proc123`
-        - Admin: `admin` / `admin123`
+        # Show role details
+        role_info = role_options[selected_role]
+        st.info(f"""
+        **Role:** {selected_role}  
+        **User:** {role_info['name']}  
+        **Workshop:** {role_info['workshop'] if role_info['workshop'] else 'All Workshops'}  
+        **Access:** {role_info['description']}
         """)
+        
+        if st.button("🚀 Start Demo", use_container_width=True, type="primary"):
+            # Get employee details
+            employee = st.session_state.df_user[
+                st.session_state.df_user['Employee_ID'] == role_info['employee_id']
+            ].iloc[0]
+            
+            st.session_state.logged_in = True
+            st.session_state.current_user = {
+                **employee.to_dict(),
+                'Role': selected_role,
+                'Workshop_Name': role_info['workshop']
+            }
+            st.success(f"Welcome, {employee['Employee_First_Name']}!")
+            st.rerun()
 
-def logout():
-    """Handle logout"""
+def change_role():
+    """Handle role change"""
     st.session_state.logged_in = False
     st.session_state.current_user = None
     st.rerun()
@@ -1572,8 +1532,8 @@ def render_sidebar():
         
         st.markdown("---")
         
-        if st.button("🚪 Logout", use_container_width=True):
-            logout()
+        if st.button("🔄 Change Role", use_container_width=True):
+            change_role()
         
         return pages[selected]
 
@@ -1587,12 +1547,12 @@ def main():
     # Initialize data
     init_data()
     
-    # Check if logged in
+    # Check if logged in (role selected)
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     
     if not st.session_state.logged_in:
-        login_page()
+        role_selection_page()
         return
     
     # Render sidebar and get selected page
